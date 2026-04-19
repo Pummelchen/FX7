@@ -1,3 +1,4 @@
+// Updates symbol features.
 bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values = false)
 {
    string sym = g_symbols[i];
@@ -184,6 +185,7 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
    return true;
 }
 
+// Neutralizes the symbol state for the current model cycle.
 void NeutralizeSymbol(const int i)
 {
    g_symbol_data_ok[i] = false;
@@ -210,6 +212,7 @@ void NeutralizeSymbol(const int i)
       g_stdret_hist[i * g_ret_hist_len + lag] = 0.0;
 }
 
+// Marks symbol data stale.
 void MarkSymbolDataStale(const int i)
 {
    if(i < 0 || i >= g_num_symbols)
@@ -222,6 +225,7 @@ void MarkSymbolDataStale(const int i)
    g_persist_count[i] = 0;
 }
 
+// Records symbol feature refresh success.
 void NoteSymbolFeatureRefreshSuccess(const int i)
 {
    if(i < 0 || i >= g_num_symbols)
@@ -233,6 +237,7 @@ void NoteSymbolFeatureRefreshSuccess(const int i)
    g_symbol_last_feature_success[i] = SafeNow();
 }
 
+// Computes an EWMA standard deviation from a newest-first series.
 double EWMAStdFromSeriesNewestFirst(const double &series[], const int count, const int half_life)
 {
    double lambda = MathExp(-MathLog(2.0) / MathMax(1.0, (double)half_life));
@@ -256,6 +261,7 @@ double EWMAStdFromSeriesNewestFirst(const double &series[], const int count, con
    return MathSqrt(MathMax(var, EPS()));
 }
 
+// Estimates round trip cost fraction.
 double EstimateRoundTripCostFraction(const string symbol,
                                      const int dir,
                                      const double mid_px,
@@ -274,6 +280,7 @@ double EstimateRoundTripCostFraction(const string symbol,
    return spread_frac + 2.0 * slip_frac + InpAssumedRoundTripFeePct + commission_frac + swap_frac;
 }
 
+// Estimates swap cash EUR per day.
 double EstimateSwapCashEURPerDay(const string symbol, const int dir, const double volume, const double ref_price)
 {
    double swap_value = (dir > 0 ? SymbolInfoDouble(symbol, SYMBOL_SWAP_LONG) : SymbolInfoDouble(symbol, SYMBOL_SWAP_SHORT));
@@ -328,6 +335,7 @@ double EstimateSwapCashEURPerDay(const string symbol, const int dir, const doubl
    return 0.0;
 }
 
+// Estimates slippage as a fraction of price.
 double SlippageFracEstimate(const string symbol, const double spread_frac)
 {
    string base = SymbolInfoString(symbol, SYMBOL_CURRENCY_BASE);
@@ -343,6 +351,7 @@ double SlippageFracEstimate(const string symbol, const double spread_frac)
    return spread_frac * 0.50;
 }
 
+// Builds composite premia alpha.
 double BuildCompositePremiaAlpha(const int idx)
 {
    double w_m, w_c, w_v;
@@ -351,6 +360,7 @@ double BuildCompositePremiaAlpha(const int idx)
    return w_m * g_M[idx] + w_c * g_Carry[idx] + w_v * g_Value[idx];
 }
 
+// Computes composite allocator weights.
 void ComputeCompositeAllocatorWeights(const int idx, double &w_m, double &w_c, double &w_v)
 {
    w_m = InpWeightMomentum;
@@ -371,6 +381,7 @@ void ComputeCompositeAllocatorWeights(const int idx, double &w_m, double &w_c, d
    NormalizePremiaWeights(w_m, w_c, w_v);
 }
 
+// Resolves value signal.
 bool ResolveValueSignal(const string symbol,
                         const double current_mid_px,
                         const datetime asof_time,
@@ -497,6 +508,7 @@ bool ResolveValueSignal(const string symbol,
    return false;
 }
 
+// Normalizes value blend weights.
 void NormalizeValueBlendWeights(double &proxy_weight, double &ppp_weight)
 {
    double sum = MathMax(proxy_weight + ppp_weight, EPS());
@@ -505,7 +517,7 @@ void NormalizeValueBlendWeights(double &proxy_weight, double &ppp_weight)
 }
 
 // Value is a slow contextual bias here, so attenuate it when the sources are weak,
-// stale, disagree, or live on a much slower horizon than the execution model.
+// Builds value influence scale.
 double BuildValueInfluenceScale(const datetime asof_time,
                                 const datetime macro_date,
                                 const bool proxy_ok,
@@ -554,6 +566,7 @@ double BuildValueInfluenceScale(const datetime asof_time,
    return Clip(source_scale * freshness_scale * timescale_scale * regime_scale, 0.0, 1.0);
 }
 
+// Computes PPP value signal.
 bool ComputePPPValueSignal(const string symbol,
                            const double current_mid_px,
                            const datetime asof_time,
@@ -575,6 +588,7 @@ bool ComputePPPValueSignal(const string symbol,
    return true;
 }
 
+// Builds PPP fair value.
 bool BuildPPPFairValue(const string symbol,
                        const double current_mid_px,
                        const datetime asof_time,
@@ -679,6 +693,7 @@ bool BuildPPPFairValue(const string symbol,
    return true;
 }
 
+// Computes proxy value signal.
 bool ComputeProxyValueSignal(const string symbol, const double current_mid_px, double &signal, double &value_gap)
 {
    signal = 0.0;
@@ -713,6 +728,7 @@ bool ComputeProxyValueSignal(const string symbol, const double current_mid_px, d
    return true;
 }
 
+// Computes carry signal.
 bool ComputeCarrySignal(const string symbol,
                         const double mid_px,
                         const datetime asof_time,
@@ -751,7 +767,7 @@ bool ComputeCarrySignal(const string symbol,
    return false;
 }
 
-// Statistical-anchor proxy: pair-level mean-reversion anchor, used only as a conservative slow bias.
+// Computes rate carry signal.
 
 bool ComputeRateCarrySignal(const string symbol,
                             const datetime asof_time,
@@ -813,6 +829,7 @@ bool ComputeRateCarrySignal(const string symbol,
    return true;
 }
 
+// Computes broker carry signal.
 bool ComputeBrokerCarrySignal(const string symbol, const double mid_px, double &signal, double &annual_spread_frac)
 {
    signal = 0.0;
@@ -829,6 +846,7 @@ bool ComputeBrokerCarrySignal(const string symbol, const double mid_px, double &
    return true;
 }
 
+// Computes the slow EWMA log-price anchor from a newest-first close series.
 double SlowEWMALogAnchorNewestFirst(const double &close[], const int newest_shift, const int oldest_shift, const int half_life)
 {
    double lambda = MathExp(-MathLog(2.0) / MathMax(1.0, (double)half_life));

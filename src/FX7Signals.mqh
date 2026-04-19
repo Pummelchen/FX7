@@ -1,3 +1,4 @@
+// Calculates portfolio crowding if the candidate is added.
 double PortfolioCrowdingIfAdded(const int idx, const int dir, const int &accepted[], const int accepted_count)
 {
    if(accepted_count <= 0)
@@ -38,6 +39,7 @@ double PortfolioCrowdingIfAdded(const int idx, const int dir, const int &accepte
    return sum / (double)pairs;
 }
 
+// Calculates the candidate uniqueness score against the accepted set.
 double CandidateUniqueness(const int idx, const int dir, const int &accepted[], const int accepted_count)
 {
    double sum_pos = 0.0;
@@ -53,6 +55,7 @@ double CandidateUniqueness(const int idx, const int dir, const int &accepted[], 
    return 1.0 / (1.0 + sum_pos);
 }
 
+// Computes novelty overlay.
 void ComputeNoveltyOverlay(const int &candidates[])
 {
    for(int i=0; i<g_num_symbols; ++i)
@@ -103,6 +106,7 @@ void ComputeNoveltyOverlay(const int &candidates[])
    }
 }
 
+// Builds correlation matrices.
 void BuildCorrelationMatrices()
 {
    for(int i=0; i<g_num_symbols; ++i)
@@ -133,6 +137,7 @@ void BuildCorrelationMatrices()
    }
 }
 
+// Updates panic gate and scores.
 void UpdatePanicGateAndScores()
 {
    BuildUniverseStdRet();
@@ -217,6 +222,7 @@ void UpdatePanicGateAndScores()
    }
 }
 
+// Returns whether the managed direction should be exited.
 bool ShouldExitManagedDirection(const int idx, const int current_dir)
 {
    if(idx < 0 || idx >= g_num_symbols || current_dir == 0)
@@ -237,6 +243,7 @@ bool ShouldExitManagedDirection(const int idx, const int current_dir)
    return (g_S[idx] >= -exit_threshold);
 }
 
+// Builds trade targets.
 void BuildTradeTargets(const int &candidate_indices[], int &target_dir[])
 {
    ArrayResize(target_dir, g_num_symbols);
@@ -292,6 +299,7 @@ void BuildTradeTargets(const int &candidate_indices[], int &target_dir[])
    }
 }
 
+// Returns whether the candidate clears the reversal threshold.
 bool CandidatePassesReversalThreshold(const int idx, const int target_dir)
 {
    if(idx < 0 || idx >= g_num_symbols || target_dir == 0)
@@ -310,6 +318,7 @@ bool CandidatePassesReversalThreshold(const int idx, const int target_dir)
    return (MathAbs(g_S[idx]) + EPS() >= InpReversalThreshold);
 }
 
+// Sorts candidate records.
 void SortCandidateRecords(FXRCCandidate &candidates[])
 {
    int n = ArraySize(candidates);
@@ -331,6 +340,7 @@ void SortCandidateRecords(FXRCCandidate &candidates[])
    }
 }
 
+// Builds candidate record.
 bool BuildCandidateRecord(const int idx, FXRCCandidate &candidate)
 {
    ResetCandidate(candidate);
@@ -357,6 +367,7 @@ bool BuildCandidateRecord(const int idx, FXRCCandidate &candidate)
    return (candidate.priority > EPS());
 }
 
+// Builds candidate priority.
 double BuildCandidatePriority(const int idx, const int dir = 0)
 {
    double base_rank = MathMax(g_Rank[idx], MathAbs(g_S[idx]) * g_Conf[idx]);
@@ -365,6 +376,7 @@ double BuildCandidatePriority(const int idx, const int dir = 0)
    return base_rank * gate_weight * momentum_weight;
 }
 
+// Builds signal direction.
 bool BuildSignalDirection(const int idx, int &dir)
 {
    dir = 0;
@@ -398,6 +410,7 @@ bool BuildSignalDirection(const int idx, int &dir)
    return (dir != 0);
 }
 
+// Returns whether the candidate clears the minimum gating checks.
 bool CandidateMeetsMinimumGates(const int idx, const int dir = 0)
 {
    if(idx < 0 || idx >= g_num_symbols || !g_symbol_data_ok[idx] || IsSymbolDataStale(idx))
@@ -412,6 +425,7 @@ bool CandidateMeetsMinimumGates(const int idx, const int dir = 0)
         && DirectionalExecGate(idx, dir) >= exec_floor);
 }
 
+// Resets candidate.
 void ResetCandidate(FXRCCandidate &candidate)
 {
    candidate.symbol_idx = -1;
@@ -425,6 +439,7 @@ void ResetCandidate(FXRCCandidate &candidate)
    candidate.novelty_rank = 0.0;
 }
 
+// Builds exit threshold.
 double BuildExitThreshold(const int idx)
 {
    double long_threshold = BuildExitThresholdDirectional(idx, 1);
@@ -432,12 +447,14 @@ double BuildExitThreshold(const int idx)
    return MathMax(long_threshold, short_threshold);
 }
 
+// Builds exit threshold directional.
 double BuildExitThresholdDirectional(const int idx, const int dir)
 {
    return InpBaseExitThreshold
         + 0.10 * InpEtaCost * DirectionalCostPenaltyTerm(idx, dir);
 }
 
+// Builds entry threshold.
 double BuildEntryThreshold(const int idx)
 {
    double long_threshold = BuildEntryThresholdDirectional(idx, 1);
@@ -445,6 +462,7 @@ double BuildEntryThreshold(const int idx)
    return MathMax(long_threshold, short_threshold);
 }
 
+// Builds entry threshold directional.
 double BuildEntryThresholdDirectional(const int idx, const int dir)
 {
    return InpBaseEntryThreshold
@@ -453,22 +471,26 @@ double BuildEntryThresholdDirectional(const int idx, const int dir)
         + 0.10 * InpEtaBreakout * (1.0 - Clip(g_BK[idx], 0.0, 1.0));
 }
 
+// Builds signal confidence.
 double BuildSignalConfidence(const int idx)
 {
    double signal_mag = MathMax(MathAbs(g_S[idx]), MathAbs(g_E[idx]));
    return Sigmoid(InpConfSlope * (signal_mag - InpTheta0));
 }
 
+// Builds signal core score.
 double BuildSignalCoreScore(const int idx)
 {
    return g_CompositeCore[idx] * g_PG[idx] * BreakoutParticipationWeight(idx);
 }
 
+// Returns the cost-penalty term for the symbol.
 double CostPenaltyTerm(const int idx)
 {
    return DirectionalCostPenaltyTerm(idx, 0);
 }
 
+// Returns the directional cost-penalty term for the symbol.
 double DirectionalCostPenaltyTerm(const int idx, const int dir)
 {
    if(idx < 0 || idx >= g_num_symbols)
@@ -478,6 +500,7 @@ double DirectionalCostPenaltyTerm(const int idx, const int dir)
    return PosPart(k_value - 1.0);
 }
 
+// Returns the directional execution gate for the symbol.
 double DirectionalExecGate(const int idx, const int dir)
 {
    if(idx < 0 || idx >= g_num_symbols)
@@ -485,17 +508,20 @@ double DirectionalExecGate(const int idx, const int dir)
    return DirectionalValue(dir, g_Q_long[idx], g_Q_short[idx], g_Q[idx]);
 }
 
+// Returns the regime-penalty term for the symbol.
 double RegimePenaltyTerm(const int idx)
 {
    return PosPart(g_V[idx] - 1.0);
 }
 
+// Returns the breakout participation weight for the symbol.
 double BreakoutParticipationWeight(const int idx)
 {
    double breakout = Clip(g_BK[idx], 0.0, 1.0);
    return 0.50 + 0.50 * MathPow(breakout, InpGammaB);
 }
 
+// Builds universe std ret.
 void BuildUniverseStdRet()
 {
    for(int lag=0; lag<g_ret_hist_len; ++lag)

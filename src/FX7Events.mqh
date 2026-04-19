@@ -1,4 +1,5 @@
-int OnInit()
+// Runs the modular EA initialization flow.
+int FX7HandleInit()
 {
    const int total_steps = 12;
    ResetRuntimeState(g_runtime_state);
@@ -193,7 +194,8 @@ int OnInit()
    return INIT_SUCCEEDED;
 }
 
-void OnTick()
+// Runs the modular tick-processing flow.
+void FX7HandleTick()
 {
    ClearConversionFailureState();
    ProcessPendingTradeVerifications(false);
@@ -290,21 +292,24 @@ void OnTick()
    ExecuteModel(entries_allowed);
 }
 
-void OnDeinit(const int reason)
+// Runs the modular EA deinitialization flow.
+void FX7HandleDeinit(const int reason)
 {
    EventKillTimer();
    ArrayResize(g_pending_state_verifications, 0);
    g_execution_state_dirty = false;
 }
 
-void OnTimer()
+// Runs the timer-driven verification flow.
+void FX7HandleTimer()
 {
    ProcessPendingTradeVerifications(true);
 }
 
-void OnTradeTransaction(const MqlTradeTransaction& trans,
-                        const MqlTradeRequest& request,
-                        const MqlTradeResult& result)
+// Processes trade-transaction callbacks in the modular runtime.
+void FX7HandleTradeTransaction(const MqlTradeTransaction& trans,
+                               const MqlTradeRequest& request,
+                               const MqlTradeResult& result)
 {
    string symbol = trans.symbol;
    if(StringLen(symbol) == 0)
@@ -319,6 +324,7 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
 }
 
 //------------------------- Runtime Flow -------------------------//
+// Executes model.
 void ExecuteModel(const bool allow_new_entries = true)
 {
    bool allow_stale_dependency_values = (g_dependency_state.status == FXRC_DEPENDENCY_DEGRADED
@@ -558,6 +564,7 @@ void ExecuteModel(const bool allow_new_entries = true)
    ClearSignalBarAdvanceFlags();
 }
 
+// Returns whether a new closed signal bar was detected.
 bool NewBarDetected()
 {
    bool changed = false;
@@ -590,12 +597,14 @@ bool NewBarDetected()
    return changed;
 }
 
+// Clears signal bar advance flags.
 void ClearSignalBarAdvanceFlags()
 {
    if(ArraySize(g_symbol_bar_advanced) == g_num_symbols)
       ArrayInitialize(g_symbol_bar_advanced, false);
 }
 
+// Returns whether all signal bars are synchronized across the universe.
 bool AreSignalBarsSynchronized()
 {
    datetime reference_bar = 0;
@@ -622,6 +631,7 @@ bool AreSignalBarsSynchronized()
 
 //------------------------- EA Events --------------------------------//
 
+// Ensures runtime ready.
 bool EnsureRuntimeReady(const bool force_log)
 {
    if(g_runtime_state.status == FXRC_RUNTIME_READY && !force_log)
@@ -636,6 +646,7 @@ bool EnsureRuntimeReady(const bool force_log)
    return RefreshRuntimeState(force_log);
 }
 
+// Refreshes runtime state.
 bool RefreshRuntimeState(const bool force_log)
 {
    if(g_num_symbols <= 0)
@@ -690,6 +701,7 @@ bool RefreshRuntimeState(const bool force_log)
    return true;
 }
 
+// Refreshes dependency runtime state.
 bool RefreshDependencyRuntimeState(bool &entries_allowed, bool &must_flatten, bool &disable_after_flatten, string &reason)
 {
    entries_allowed = true;
@@ -832,12 +844,14 @@ bool RefreshDependencyRuntimeState(bool &entries_allowed, bool &must_flatten, bo
    return true;
 }
 
+// Refreshes cycle execution state.
 void RefreshCycleExecutionState(FXRCExecutionSnapshot &snapshot, int &active_orders_total)
 {
    RefreshExecutionSnapshot(snapshot);
    active_orders_total = snapshot.account_active_orders;
 }
 
+// Handles dependency emergency flatten.
 bool HandleDependencyEmergencyFlatten(const string reason)
 {
    if(g_dependency_state.status != FXRC_DEPENDENCY_SHUTDOWN_PENDING)
@@ -858,6 +872,7 @@ bool HandleDependencyEmergencyFlatten(const string reason)
    return (orders_ok && !HasManagedExposureOrOrders());
 }
 
+// Handles hard stop emergency shutdown.
 bool HandleHardStopEmergencyShutdown(const string reason)
 {
    if(!g_hard_stop_active)
@@ -885,6 +900,7 @@ bool HandleHardStopEmergencyShutdown(const string reason)
    return false;
 }
 
+// Handles session profit reset.
 bool HandleSessionProfitReset()
 {
    if(!IsClassicSessionResetActive())
@@ -917,6 +933,7 @@ bool HandleSessionProfitReset()
    return true;
 }
 
+// Handles backtest inactivity stop.
 bool HandleBacktestInactivityStop()
 {
    if(!MQLInfoInteger(MQL_TESTER))
@@ -945,6 +962,7 @@ bool HandleBacktestInactivityStop()
    return true;
 }
 
+// Handles trailing stop exits.
 bool HandleTrailingStopExits()
 {
    if(!IsClassicTrailingActive())
@@ -1006,6 +1024,7 @@ bool HandleTrailingStopExits()
    return closed_any;
 }
 
+// Handles single position take profits.
 bool HandleSinglePositionTakeProfits()
 {
    if(!IsClassicTakeProfitActive())
@@ -1037,6 +1056,7 @@ bool HandleSinglePositionTakeProfits()
    return closed_any;
 }
 
+// Records backtest entry time.
 void RecordBacktestEntryTime(const datetime when)
 {
    if(!MQLInfoInteger(MQL_TESTER) || when <= 0)
@@ -1047,6 +1067,7 @@ void RecordBacktestEntryTime(const datetime when)
    g_recent_entry_times[new_size - 1] = when;
 }
 
+// Prunes backtest entry times.
 void PruneBacktestEntryTimes(const datetime now)
 {
    const int window_seconds = 30 * 24 * 60 * 60;
@@ -1064,6 +1085,7 @@ void PruneBacktestEntryTimes(const datetime now)
    }
 }
 
+// Synchronizes the trailing-stop state with the currently open positions.
 void SyncTrailingState()
 {
    for(int i=ArraySize(g_trail_tickets)-1; i>=0; --i)
@@ -1075,6 +1097,7 @@ void SyncTrailingState()
    }
 }
 
+// Removes trailing state at.
 void RemoveTrailingStateAt(const int idx)
 {
    int last = ArraySize(g_trail_tickets) - 1;
@@ -1091,6 +1114,7 @@ void RemoveTrailingStateAt(const int idx)
    ArrayResize(g_trail_peak_profit_usd, last);
 }
 
+// Finds trailing state index.
 int FindTrailingStateIndex(const ulong ticket)
 {
    for(int i=0; i<ArraySize(g_trail_tickets); ++i)
@@ -1101,6 +1125,7 @@ int FindTrailingStateIndex(const ulong ticket)
    return -1;
 }
 
+// Returns the managed position profit in USD.
 double ManagedPositionProfitUSD(const ulong ticket)
 {
    if(ticket == 0 || !PositionSelectByTicket(ticket) || !IsSelectedFXRCPosition())
@@ -1118,6 +1143,7 @@ double ManagedPositionProfitUSD(const ulong ticket)
    return profit_usd;
 }
 
+// Returns the commission cash booked against the position.
 double PositionCommissionCash(const ulong ticket)
 {
    if(ticket == 0)
@@ -1140,6 +1166,7 @@ double PositionCommissionCash(const ulong ticket)
    return total_commission;
 }
 
+// Ensures protective stops.
 void EnsureProtectiveStops()
 {
    for(int i=PositionsTotal()-1; i>=0; --i)
@@ -1160,6 +1187,7 @@ void EnsureProtectiveStops()
    }
 }
 
+// Ensures stop on ticket.
 bool EnsureStopOnTicket(const ulong ticket, const int symbol_idx)
 {
    if(ticket == 0)
@@ -1197,6 +1225,7 @@ bool EnsureStopOnTicket(const ulong ticket, const int symbol_idx)
    return SendTradeRequestWithRetry(request, "protective stop", false, result);
 }
 
+// Resets strategy cycle state.
 void ResetStrategyCycleState(const bool reset_session_baseline)
 {
    ArrayInitialize(g_E, 0.0);

@@ -1,3 +1,4 @@
+// Opens managed position.
 bool OpenManagedPosition(const int symbol_idx,
                          const int dir,
                          const FXRCExecutionSnapshot &snapshot)
@@ -75,6 +76,7 @@ bool OpenManagedPosition(const int symbol_idx,
    return true;
 }
 
+// Builds trade plan.
 bool BuildTradePlan(const int symbol_idx,
                     const string symbol,
                     const int dir,
@@ -227,6 +229,7 @@ bool BuildTradePlan(const int symbol_idx,
    return ValidateTradePlan(plan, reason);
 }
 
+// Validates trade plan.
 bool ValidateTradePlan(const FXRCTradePlan &plan, string &reason)
 {
    reason = "";
@@ -260,6 +263,7 @@ bool ValidateTradePlan(const FXRCTradePlan &plan, string &reason)
    return true;
 }
 
+// Calculates the modern target risk percentage for the candidate.
 double ModernTargetRiskPct(const int idx, const int dir, const double atr_pct, double &score_out, double &vol_mult_out, double &cov_mult_out)
 {
    score_out = ModernSizingScore(idx, dir, atr_pct);
@@ -276,6 +280,7 @@ double ModernTargetRiskPct(const int idx, const int dir, const double atr_pct, d
    return target_risk_pct;
 }
 
+// Calculates the volatility multiplier for modern sizing.
 double ModernVolatilityMultiplier(const double atr_pct)
 {
    if(atr_pct <= EPS())
@@ -284,6 +289,7 @@ double ModernVolatilityMultiplier(const double atr_pct)
    return Clip(InpModernTargetATRPct / atr_pct, InpModernVolAdjustMin, InpModernVolAdjustMax);
 }
 
+// Calculates the modern sizing score for the candidate.
 double ModernSizingScore(const int idx, const int dir, const double atr_pct)
 {
    if(idx < 0 || idx >= g_num_symbols)
@@ -307,6 +313,7 @@ double ModernSizingScore(const int idx, const int dir, const double atr_pct)
              + 0.06 * novelty, 0.0, 1.0);
 }
 
+// Calculates the active-portfolio correlation penalty.
 double ActivePortfolioCorrelationPenalty(const int idx, const int dir)
 {
    if(idx < 0 || idx >= g_num_symbols)
@@ -349,6 +356,7 @@ double ActivePortfolioCorrelationPenalty(const int idx, const int dir)
    return Clip(1.0 - 0.60 * avg_positive_corr, InpModernCovariancePenaltyFloor, 1.0);
 }
 
+// Closes all managed positions.
 void CloseAllManagedPositions(const string reason)
 {
    for(int i=PositionsTotal()-1; i>=0; --i)
@@ -364,6 +372,7 @@ void CloseAllManagedPositions(const string reason)
    }
 }
 
+// Cleans up unexpected managed pending orders.
 bool CleanupUnexpectedManagedPendingOrders(const string reason)
 {
    int pending = CountManagedPendingOrders();
@@ -377,6 +386,7 @@ bool CleanupUnexpectedManagedPendingOrders(const string reason)
    return true;
 }
 
+// Deletes all managed pending orders.
 bool DeleteAllManagedPendingOrders(const string reason)
 {
    ulong tickets[];
@@ -394,6 +404,7 @@ bool DeleteAllManagedPendingOrders(const string reason)
    return (ok && CountManagedPendingOrders() == 0);
 }
 
+// Closes managed positions for symbol.
 bool CloseManagedPositionsForSymbol(const string symbol, const string reason)
 {
    ulong tickets[];
@@ -419,6 +430,7 @@ bool CloseManagedPositionsForSymbol(const string symbol, const string reason)
    return false;
 }
 
+// Deletes managed pending order.
 bool DeleteManagedPendingOrder(const ulong ticket, const string reason)
 {
    if(ticket == 0 || !OrderSelect(ticket) || !IsSelectedFXRCOrder())
@@ -444,6 +456,7 @@ bool DeleteManagedPendingOrder(const ulong ticket, const string reason)
    return true;
 }
 
+// Closes managed position ticket.
 bool CloseManagedPositionTicket(const ulong ticket, const string reason)
 {
    if(ticket == 0 || !PositionSelectByTicket(ticket) || !IsSelectedFXRCPosition())
@@ -484,6 +497,7 @@ bool CloseManagedPositionTicket(const ulong ticket, const string reason)
    return true;
 }
 
+// Builds protective stop.
 bool BuildProtectiveStop(const string symbol, const int dir, const double atr_pct, double &entry_price, double &stop_price)
 {
    MqlTick tick;
@@ -510,6 +524,7 @@ bool BuildProtectiveStop(const string symbol, const int dir, const double atr_pc
    return (stop_price > 0.0);
 }
 
+// Returns the minimum stop-distance price for the symbol.
 double MinStopDistancePrice(const string symbol)
 {
    double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
@@ -519,6 +534,7 @@ double MinStopDistancePrice(const string symbol)
    return MathMax(min_points * point, point);
 }
 
+// Sends a trade request with retry and optional order-check handling.
 bool SendTradeRequestWithRetry(MqlTradeRequest &request, const string context, const bool use_check, MqlTradeResult &result)
 {
    for(int attempt=0; attempt<=InpTradeRetryCount; ++attempt)
@@ -565,6 +581,7 @@ bool SendTradeRequestWithRetry(MqlTradeRequest &request, const string context, c
    return false;
 }
 
+// Refreshes entry request stop.
 void RefreshEntryRequestStop(MqlTradeRequest &request,
                              const MqlTick &tick,
                              const double previous_price,
@@ -608,6 +625,7 @@ void RefreshEntryRequestStop(MqlTradeRequest &request,
    }
 }
 
+// Refreshes request price.
 bool RefreshRequestPrice(MqlTradeRequest &request)
 {
    if(request.action != TRADE_ACTION_DEAL)
@@ -625,6 +643,7 @@ bool RefreshRequestPrice(MqlTradeRequest &request)
    return true;
 }
 
+// Resolves filling type.
 bool ResolveFillingType(const string symbol, ENUM_ORDER_TYPE_FILLING &filling)
 {
    long filling_mode = SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE);
@@ -662,11 +681,13 @@ bool ResolveFillingType(const string symbol, ENUM_ORDER_TYPE_FILLING &filling)
 }
 
 //------------------------- Execution State And Ownership -------------------------//
+// Marks execution state dirty.
 void MarkExecutionStateDirty()
 {
    g_execution_state_dirty = true;
 }
 
+// Finds managed state verification.
 int FindManagedStateVerification(const string symbol)
 {
    for(int i=0; i<ArraySize(g_pending_state_verifications); ++i)
@@ -677,6 +698,7 @@ int FindManagedStateVerification(const string symbol)
    return -1;
 }
 
+// Removes managed state verification at.
 void RemoveManagedStateVerificationAt(const int idx)
 {
    int count = ArraySize(g_pending_state_verifications);
@@ -689,6 +711,7 @@ void RemoveManagedStateVerificationAt(const int idx)
    ArrayResize(g_pending_state_verifications, count - 1);
 }
 
+// Marks pending verification urgent.
 void MarkPendingVerificationUrgent(const string symbol)
 {
    int idx = FindManagedStateVerification(symbol);
@@ -698,6 +721,7 @@ void MarkPendingVerificationUrgent(const string symbol)
    g_pending_state_verifications[idx].next_check_time = 0;
 }
 
+// Queues managed state verification.
 void QueueManagedStateVerification(const string symbol, const int expected_dir, const string context)
 {
    if(!IsForexPairSymbol(symbol))
@@ -724,6 +748,7 @@ void QueueManagedStateVerification(const string symbol, const int expected_dir, 
    MarkExecutionStateDirty();
 }
 
+// Returns whether the managed state matches the expected direction.
 bool ManagedStateMatchesExpectation(const string symbol, const int expected_dir)
 {
    int dir = 0;
@@ -738,6 +763,7 @@ bool ManagedStateMatchesExpectation(const string symbol, const int expected_dir)
    return (!mixed && count == 1 && dir == expected_dir);
 }
 
+// Processes pending trade verifications.
 void ProcessPendingTradeVerifications(const bool force_refresh)
 {
    datetime now = SafeNow();
@@ -788,6 +814,7 @@ void ProcessPendingTradeVerifications(const bool force_refresh)
    }
 }
 
+// Returns whether the managed symbol state verifies successfully.
 bool VerifyManagedState(const string symbol, const int expected_dir)
 {
    ProcessPendingTradeVerifications(true);
@@ -812,6 +839,7 @@ bool VerifyManagedState(const string symbol, const int expected_dir)
    return false;
 }
 
+// Gets the managed position state for the symbol.
 void GetManagedPositionState(const string symbol, int &dir, int &count, double &volume, bool &mixed)
 {
    dir = 0;
@@ -849,12 +877,14 @@ void GetManagedPositionState(const string symbol, int &dir, int &count, double &
    dir = (mixed ? 0 : seen_dir);
 }
 
+// Counts managed pending orders.
 int CountManagedPendingOrders()
 {
    ulong tickets[];
    return CollectManagedPendingOrders(tickets);
 }
 
+// Counts managed open positions.
 int CountManagedOpenPositions()
 {
    int count = 0;
@@ -870,6 +900,7 @@ int CountManagedOpenPositions()
    return count;
 }
 
+// Collects managed pending orders for symbol.
 int CollectManagedPendingOrdersForSymbol(const string symbol, ulong &tickets[])
 {
    ArrayResize(tickets, 0);
@@ -897,6 +928,7 @@ int CollectManagedPendingOrdersForSymbol(const string symbol, ulong &tickets[])
    return ArraySize(tickets);
 }
 
+// Collects managed pending orders.
 int CollectManagedPendingOrders(ulong &tickets[])
 {
    ArrayResize(tickets, 0);
@@ -922,6 +954,7 @@ int CollectManagedPendingOrders(ulong &tickets[])
    return ArraySize(tickets);
 }
 
+// Collects managed tickets.
 int CollectManagedTickets(const string symbol, ulong &tickets[])
 {
    ArrayResize(tickets, 0);
@@ -949,6 +982,7 @@ int CollectManagedTickets(const string symbol, ulong &tickets[])
    return ArraySize(tickets);
 }
 
+// Refreshes execution snapshot.
 void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
 {
    ResetExecutionSnapshot(snapshot);
@@ -1030,6 +1064,7 @@ void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
    }
 }
 
+// Accumulates tracked order state.
 void AccumulateTrackedOrderState(const string symbol)
 {
    int idx = FindTrackedSymbolIndex(symbol);
@@ -1037,6 +1072,7 @@ void AccumulateTrackedOrderState(const string symbol)
       g_exec_symbol_state[idx].account_active_orders++;
 }
 
+// Accumulates tracked position state.
 void AccumulateTrackedPositionState(const string symbol, const int dir, const double volume)
 {
    int idx = FindTrackedSymbolIndex(symbol);
@@ -1056,11 +1092,13 @@ void AccumulateTrackedPositionState(const string symbol, const int dir, const do
    }
 }
 
+// Returns whether managed exposure or pending orders exist.
 bool HasManagedExposureOrOrders()
 {
    return (CountManagedOpenPositions() > 0 || CountManagedPendingOrders() > 0);
 }
 
+// Returns whether the symbol has active state outside FX7 ownership.
 bool SymbolHasForeignActiveState(const string symbol)
 {
    if(!IsForexPairSymbol(symbol))
@@ -1097,6 +1135,7 @@ bool SymbolHasForeignActiveState(const string symbol)
    return false;
 }
 
+// Returns whether the currently selected order belongs to FX7.
 bool IsSelectedFXRCOrder()
 {
    string symbol = OrderGetString(ORDER_SYMBOL);
@@ -1106,6 +1145,7 @@ bool IsSelectedFXRCOrder()
    return IsFXRCMagic(OrderGetInteger(ORDER_MAGIC));
 }
 
+// Returns whether the currently selected position belongs to FX7.
 bool IsSelectedFXRCPosition()
 {
    string symbol = PositionGetString(POSITION_SYMBOL);
@@ -1115,6 +1155,7 @@ bool IsSelectedFXRCPosition()
    return IsFXRCMagic(PositionGetInteger(POSITION_MAGIC));
 }
 
+// Returns whether the order ticket belongs to FX7.
 bool IsFXRCOrderOwnedTicket(const ulong ticket)
 {
    if(ticket == 0 || !OrderSelect(ticket))
@@ -1127,6 +1168,7 @@ bool IsFXRCOrderOwnedTicket(const ulong ticket)
    return IsFXRCMagic(OrderGetInteger(ORDER_MAGIC));
 }
 
+// Returns whether the position ticket belongs to FX7.
 bool IsFXRCPositionOwnedTicket(const ulong ticket)
 {
    if(ticket == 0 || !PositionSelectByTicket(ticket))
@@ -1139,6 +1181,7 @@ bool IsFXRCPositionOwnedTicket(const ulong ticket)
    return IsFXRCMagic(PositionGetInteger(POSITION_MAGIC));
 }
 
+// Returns whether the magic number belongs to FX7.
 bool IsFXRCMagic(const long magic)
 {
    return (magic == InpMagicNumber);

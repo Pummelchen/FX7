@@ -1,3 +1,4 @@
+// Evaluates required dependency health.
 bool EvaluateRequiredDependencyHealth(const datetime asof_time, string &scope, string &reason)
 {
    scope = "";
@@ -35,11 +36,13 @@ bool EvaluateRequiredDependencyHealth(const datetime asof_time, string &scope, s
    return false;
 }
 
+// Returns whether the runtime requires carry or PPP dependencies.
 bool DependenciesRequiredAtRuntime()
 {
    return (CarrySignalRequiresExternalData() || ValueSignalRequiresPPPData());
 }
 
+// Evaluates PPP dependency health.
 bool EvaluatePPPDependencyHealth(const datetime asof_time, string &reason)
 {
    reason = "";
@@ -88,6 +91,7 @@ bool EvaluatePPPDependencyHealth(const datetime asof_time, string &reason)
    return true;
 }
 
+// Evaluates carry dependency health.
 bool EvaluateCarryDependencyHealth(const datetime asof_time, string &reason)
 {
    reason = "";
@@ -136,6 +140,7 @@ bool EvaluateCarryDependencyHealth(const datetime asof_time, string &reason)
    return true;
 }
 
+// Validates required PPP coverage.
 bool ValidateRequiredPPPCoverage(string &reason)
 {
    reason = "";
@@ -164,6 +169,7 @@ bool ValidateRequiredPPPCoverage(string &reason)
    return true;
 }
 
+// Validates required carry coverage.
 bool ValidateRequiredCarryCoverage(string &reason)
 {
    reason = "";
@@ -192,6 +198,7 @@ bool ValidateRequiredCarryCoverage(string &reason)
    return true;
 }
 
+// Ensures PPP data cache.
 bool EnsurePPPDataCache(const bool force_log)
 {
    if(!ValueModelUsesPPP())
@@ -211,6 +218,7 @@ bool EnsurePPPDataCache(const bool force_log)
    return LoadPPPDataCache(force_log);
 }
 
+// Loads PPP data cache.
 bool LoadPPPDataCache(const bool force_log)
 {
    FXRCPPPCacheState previous = g_ppp_cache;
@@ -266,6 +274,7 @@ bool LoadPPPDataCache(const bool force_log)
    return g_ppp_cache.available;
 }
 
+// Ensures carry data cache.
 bool EnsureCarryDataCache(const bool force_log)
 {
    if(!CarryModelUsesExternal())
@@ -285,6 +294,7 @@ bool EnsureCarryDataCache(const bool force_log)
    return LoadCarryDataCache(force_log);
 }
 
+// Loads carry data cache.
 bool LoadCarryDataCache(const bool force_log)
 {
    FXRCCarryCacheState previous = g_carry_cache;
@@ -340,6 +350,7 @@ bool LoadCarryDataCache(const bool force_log)
    return g_carry_cache.available;
 }
 
+// Builds PPP records at startup.
 bool BuildPPPRecordsAtStartup(string &temp_ccy[],
                               datetime &temp_dates[],
                               double &temp_cpi[],
@@ -390,6 +401,7 @@ bool BuildPPPRecordsAtStartup(string &temp_ccy[],
    return true;
 }
 
+// Builds carry records at startup.
 bool BuildCarryRecordsAtStartup(string &temp_ccy[],
                                 datetime &temp_dates[],
                                 double &temp_rates[],
@@ -440,6 +452,7 @@ bool BuildCarryRecordsAtStartup(string &temp_ccy[],
    return true;
 }
 
+// Collects required macro currencies.
 int CollectRequiredMacroCurrencies(string &currencies[])
 {
    ArrayResize(currencies, 0);
@@ -451,6 +464,7 @@ int CollectRequiredMacroCurrencies(string &currencies[])
    return ArraySize(currencies);
 }
 
+// Appends currency if missing.
 void AppendCurrencyIfMissing(string &currencies[], const string currency)
 {
    string normalized = NormalizeCurrencyCode(currency);
@@ -468,6 +482,7 @@ void AppendCurrencyIfMissing(string &currencies[], const string currency)
    currencies[new_size - 1] = normalized;
 }
 
+// Builds carry currency series from calendar.
 bool BuildCarryCurrencySeriesFromCalendar(const string currency,
                                           string &temp_ccy[],
                                           datetime &temp_dates[],
@@ -523,6 +538,7 @@ bool BuildCarryCurrencySeriesFromCalendar(const string currency,
    return true;
 }
 
+// Builds PPP currency series from calendar.
 bool BuildPPPCurrencySeriesFromCalendar(const string currency,
                                         string &temp_ccy[],
                                         datetime &temp_dates[],
@@ -576,6 +592,7 @@ bool BuildPPPCurrencySeriesFromCalendar(const string currency,
    return true;
 }
 
+// Selects calendar carry event.
 bool SelectCalendarCarryEvent(const string currency, MqlCalendarEvent &selected, string &reason)
 {
    reason = "";
@@ -610,6 +627,7 @@ bool SelectCalendarCarryEvent(const string currency, MqlCalendarEvent &selected,
    return true;
 }
 
+// Selects calendar PPP event.
 bool SelectCalendarPPPEvent(const string currency, MqlCalendarEvent &selected, string &reason)
 {
    reason = "";
@@ -644,6 +662,7 @@ bool SelectCalendarPPPEvent(const string currency, MqlCalendarEvent &selected, s
    return true;
 }
 
+// Scores a carry calendar event for the requested currency.
 int ScoreCarryCalendarEvent(const string currency, const MqlCalendarEvent &event)
 {
    if(event.type != CALENDAR_TYPE_INDICATOR)
@@ -682,6 +701,7 @@ int ScoreCarryCalendarEvent(const string currency, const MqlCalendarEvent &event
    return score;
 }
 
+// Scores a PPP calendar event for the requested currency.
 int ScorePPPCalendarEvent(const string currency, const MqlCalendarEvent &event)
 {
    if(event.type != CALENDAR_TYPE_INDICATOR)
@@ -726,6 +746,7 @@ int ScorePPPCalendarEvent(const string currency, const MqlCalendarEvent &event)
    return score;
 }
 
+// Returns whether the calendar event code is preferred for carry data.
 bool IsPreferredCarryEventCode(const string currency, const string code)
 {
    string ccy = NormalizeCurrencyCode(currency);
@@ -752,6 +773,7 @@ bool IsPreferredCarryEventCode(const string currency, const string code)
    return false;
 }
 
+// Returns whether the calendar event code is preferred for PPP data.
 bool IsPreferredPPPEventCode(const string currency, const string code)
 {
    string ccy = NormalizeCurrencyCode(currency);
@@ -768,6 +790,7 @@ bool IsPreferredPPPEventCode(const string currency, const string code)
    return false;
 }
 
+// Extracts the best available actual calendar value.
 bool ExtractCalendarActualValue(const MqlCalendarValue &value, double &actual)
 {
    actual = 0.0;
@@ -783,6 +806,7 @@ bool ExtractCalendarActualValue(const MqlCalendarValue &value, double &actual)
    return (actual == actual);
 }
 
+// Returns the effective record time for a calendar value.
 datetime CalendarValueRecordTime(const MqlCalendarValue &value)
 {
    datetime epoch_guard = D'1971.01.01';
@@ -791,6 +815,7 @@ datetime CalendarValueRecordTime(const MqlCalendarValue &value)
    return value.time;
 }
 
+// Builds the start time for macro-history requests.
 datetime BuildMacroHistoryStartTime(const int months_back)
 {
    datetime now = SafeNow();
@@ -801,6 +826,7 @@ datetime BuildMacroHistoryStartTime(const int months_back)
    return AddMonthsToDate(MacroMonthStart(now), -MathMax(months_back, 24));
 }
 
+// Returns the month-start timestamp for the supplied datetime.
 datetime MacroMonthStart(const datetime when)
 {
    MqlDateTime tm;
@@ -812,6 +838,7 @@ datetime MacroMonthStart(const datetime when)
    return StructToTime(tm);
 }
 
+// Adds a month offset to a month-aligned timestamp.
 datetime AddMonthsToDate(const datetime when, const int offset)
 {
    MqlDateTime tm;
@@ -837,6 +864,7 @@ datetime AddMonthsToDate(const datetime when, const int offset)
    return StructToTime(tm);
 }
 
+// Appends macro record.
 void AppendMacroRecord(string &ccy[],
                        datetime &dates[],
                        double &values[],
@@ -853,6 +881,7 @@ void AppendMacroRecord(string &ccy[],
    values[new_size - 1] = record_value;
 }
 
+// Upserts monthly observation.
 void UpsertMonthlyObservation(datetime &months[], double &values[], const datetime month_start, const double value)
 {
    for(int i=0; i<ArraySize(months); ++i)
@@ -871,6 +900,7 @@ void UpsertMonthlyObservation(datetime &months[], double &values[], const dateti
    values[new_size - 1] = value;
 }
 
+// Sorts monthly observations.
 void SortMonthlyObservations(datetime &months[], double &values[])
 {
    int n = ArraySize(months);
@@ -896,6 +926,7 @@ void SortMonthlyObservations(datetime &months[], double &values[])
    }
 }
 
+// Appends carry series from rate observations.
 bool AppendCarrySeriesFromRateObservations(const string currency,
                                            const datetime &months[],
                                            const double &monthly_rates[],
@@ -949,6 +980,7 @@ bool AppendCarrySeriesFromRateObservations(const string currency,
    return true;
 }
 
+// Appends PPP series from inflation rates.
 bool AppendPPPSeriesFromInflationRates(const string currency,
                                        const datetime &months[],
                                        const double &annual_rates[],
@@ -985,6 +1017,7 @@ bool AppendPPPSeriesFromInflationRates(const string currency,
    return true;
 }
 
+// Converts an annual rate into a monthly compounding factor.
 double AnnualRateToMonthlyFactor(const double annual_rate_pct)
 {
    double annual_factor = 1.0 + annual_rate_pct / 100.0;
@@ -992,6 +1025,7 @@ double AnnualRateToMonthlyFactor(const double annual_rate_pct)
    return MathPow(annual_factor, 1.0 / 12.0);
 }
 
+// Appends fallback carry series.
 bool AppendFallbackCarrySeries(const string currency,
                                string &temp_ccy[],
                                datetime &temp_dates[],
@@ -1025,6 +1059,7 @@ bool AppendFallbackCarrySeries(const string currency,
    return true;
 }
 
+// Appends fallback PPP series.
 bool AppendFallbackPPPSeries(const string currency,
                              string &temp_ccy[],
                              datetime &temp_dates[],
@@ -1058,6 +1093,7 @@ bool AppendFallbackPPPSeries(const string currency,
    return true;
 }
 
+// Returns whether a built-in macro fallback profile exists for the currency.
 bool HasFallbackCurrencyProfile(const string currency)
 {
    return (currency == "USD" || currency == "EUR" || currency == "GBP" || currency == "JPY"
@@ -1065,6 +1101,7 @@ bool HasFallbackCurrencyProfile(const string currency)
         || currency == "SEK" || currency == "NOK");
 }
 
+// Returns the built-in fallback carry rate for the requested date.
 double FallbackCarryRatePct(const string currency, const datetime when)
 {
    MqlDateTime tm;
@@ -1155,6 +1192,7 @@ double FallbackCarryRatePct(const string currency, const datetime when)
    return 0.0;
 }
 
+// Returns the built-in fallback annual PPP inflation rate for the requested date.
 double FallbackPPPAnnualRatePct(const string currency, const datetime when)
 {
    MqlDateTime tm;
@@ -1245,6 +1283,7 @@ double FallbackPPPAnnualRatePct(const string currency, const datetime when)
    return 2.5;
 }
 
+// Normalizes calendar token.
 string NormalizeCalendarToken(const string value)
 {
    string out = value;
@@ -1254,6 +1293,7 @@ string NormalizeCalendarToken(const string value)
    return out;
 }
 
+// Normalizes carry rate value.
 bool NormalizeCarryRateValue(const double raw_value, double &normalized_rate)
 {
    normalized_rate = 0.0;
@@ -1277,6 +1317,7 @@ bool NormalizeCarryRateValue(const double raw_value, double &normalized_rate)
 }
 
 
+// Gets the series close at or before the requested time.
 bool GetSeriesCloseAtOrBefore(const string symbol,
                               const ENUM_TIMEFRAMES timeframe,
                               const datetime when,
@@ -1298,6 +1339,7 @@ bool GetSeriesCloseAtOrBefore(const string symbol,
    return (close_price > 0.0);
 }
 
+// Gets the rolling value-anchor time for the symbol.
 bool GetRollingValueAnchorTime(const string symbol, const datetime asof_time, datetime &anchor_time)
 {
    anchor_time = 0;
@@ -1317,6 +1359,7 @@ bool GetRollingValueAnchorTime(const string symbol, const datetime asof_time, da
    return (anchor_time > 0);
 }
 
+// Gets the first PPP record date for the currency.
 bool GetPPPFirstRecordDate(const string currency, datetime &record_date)
 {
    record_date = 0;
@@ -1332,6 +1375,7 @@ bool GetPPPFirstRecordDate(const string currency, datetime &record_date)
    return (record_date > 0);
 }
 
+// Gets the carry record at or before the requested time.
 bool GetCarryRecordAtOrBefore(const string currency, const datetime asof_time, double &rate_value, datetime &record_date)
 {
    rate_value = 0.0;
@@ -1356,6 +1400,7 @@ bool GetCarryRecordAtOrBefore(const string currency, const datetime asof_time, d
    return false;
 }
 
+// Gets the PPP record at or before the requested time.
 bool GetPPPRecordAtOrBefore(const string currency, const datetime asof_time, double &cpi_value, datetime &record_date)
 {
    cpi_value = 0.0;
@@ -1380,6 +1425,7 @@ bool GetPPPRecordAtOrBefore(const string currency, const datetime asof_time, dou
    return false;
 }
 
+// Finds carry currency index.
 int FindCarryCurrencyIndex(const string currency)
 {
    string needle = NormalizeCurrencyCode(currency);
@@ -1391,6 +1437,7 @@ int FindCarryCurrencyIndex(const string currency)
    return -1;
 }
 
+// Finds PPP currency index.
 int FindPPPCurrencyIndex(const string currency)
 {
    string needle = NormalizeCurrencyCode(currency);
@@ -1402,6 +1449,7 @@ int FindPPPCurrencyIndex(const string currency)
    return -1;
 }
 
+// Builds carry index from records.
 void BuildCarryIndexFromRecords(const string &ccy[])
 {
    ArrayResize(g_carry_index_ccy, 0);
@@ -1432,6 +1480,7 @@ void BuildCarryIndexFromRecords(const string &ccy[])
    }
 }
 
+// Builds PPP index from records.
 void BuildPPPIndexFromRecords(const string &ccy[])
 {
    ArrayResize(g_ppp_index_ccy, 0);
@@ -1462,6 +1511,7 @@ void BuildPPPIndexFromRecords(const string &ccy[])
    }
 }
 
+// Sorts PPP records.
 void SortPPPRecords(string &ccy[], datetime &dates[], double &values[])
 {
    int n = ArraySize(ccy);
@@ -1491,6 +1541,7 @@ void SortPPPRecords(string &ccy[], datetime &dates[], double &values[])
    }
 }
 
+// Returns whether one PPP record sorts before another.
 bool PPPRecordLess(const string ccy_a, const datetime date_a, const string ccy_b, const datetime date_b)
 {
    if(ccy_a < ccy_b)
@@ -1500,6 +1551,7 @@ bool PPPRecordLess(const string ccy_a, const datetime date_a, const string ccy_b
    return (date_a < date_b);
 }
 
+// Normalizes currency code.
 string NormalizeCurrencyCode(const string value)
 {
    string out = value;
@@ -1509,6 +1561,7 @@ string NormalizeCurrencyCode(const string value)
    return out;
 }
 
+// Normalizes premia weights.
 void NormalizePremiaWeights(double &w_m, double &w_c, double &w_v)
 {
    double wsum = MathMax(w_m + w_c + w_v, EPS());

@@ -1,3 +1,4 @@
+// Finds conversion cache index.
 int FindConversionCacheIndex(const string from, const string to)
 {
    for(int i=0; i<ArraySize(g_conversion_cache_from); ++i)
@@ -8,6 +9,7 @@ int FindConversionCacheIndex(const string from, const string to)
    return -1;
 }
 
+// Stores a currency-conversion rate in the cache.
 void RememberConversionRate(const string from, const string to, const double rate)
 {
    if(rate <= EPS())
@@ -31,6 +33,7 @@ void RememberConversionRate(const string from, const string to, const double rat
    g_conversion_cache_time[idx] = SafeNow();
 }
 
+// Attempts to get cached conversion rate.
 bool TryGetCachedConversionRate(const string from, const string to, const int max_age_seconds, double &rate)
 {
    string norm_from = NormalizeCurrencyCode(from);
@@ -67,6 +70,7 @@ bool TryGetCachedConversionRate(const string from, const string to, const int ma
    return false;
 }
 
+// Ensures reference EUR notional.
 bool EnsureReferenceEURNotional()
 {
    g_reference_eur_notional = ReferenceEURNotional();
@@ -83,6 +87,7 @@ bool EnsureReferenceEURNotional()
    return false;
 }
 
+// Returns the reference EUR notional used by the strategy.
 double ReferenceEURNotional()
 {
    if(g_reference_eur_notional > EPS())
@@ -101,6 +106,7 @@ double ReferenceEURNotional()
    return g_reference_eur_notional;
 }
 
+// Finds the reference EURUSD symbol in the tracked universe.
 bool FindReferenceEURUSDSymbol(string &symbol)
 {
    for(int i=0; i<g_num_symbols; ++i)
@@ -124,6 +130,7 @@ bool FindReferenceEURUSDSymbol(string &symbol)
    return false;
 }
 
+// Estimates notional EUR.
 bool EstimateNotionalEUR(const string symbol, const double volume, double &notional_eur)
 {
    string base = SymbolInfoString(symbol, SYMBOL_CURRENCY_BASE);
@@ -142,16 +149,19 @@ bool EstimateNotionalEUR(const string symbol, const double volume, double &notio
    return (notional_eur > EPS());
 }
 
+// Converts cash to USD.
 double ConvertCashToUSD(const string ccy, const double amount)
 {
    return ConvertCash(ccy, "USD", amount);
 }
 
+// Converts cash to EUR.
 double ConvertCashToEUR(const string ccy, const double amount)
 {
    return ConvertCash(ccy, "EUR", amount);
 }
 
+// Converts cash.
 double ConvertCash(const string from_ccy, const string to_ccy, const double amount)
 {
    double converted = 0.0;
@@ -160,11 +170,13 @@ double ConvertCash(const string from_ccy, const string to_ccy, const double amou
    return 0.0;
 }
 
+// Gets the currency-to-EUR conversion rate.
 bool CurrencyToEURRate(const string ccy, double &rate)
 {
    return GetCurrencyConversionRate(ccy, "EUR", 2, rate);
 }
 
+// Gets a currency-conversion rate from cached, direct, or bridged paths.
 bool GetCurrencyConversionRate(const string from, const string to, const int depth, double &rate)
 {
    string norm_from = NormalizeCurrencyCode(from);
@@ -206,6 +218,7 @@ bool GetCurrencyConversionRate(const string from, const string to, const int dep
    return TryGetCachedConversionRate(norm_from, norm_to, 3600, rate);
 }
 
+// Finds direct conversion rate.
 bool FindDirectConversionRate(const string from, const string to, double &rate)
 {
    if(from == to)
@@ -245,6 +258,7 @@ bool FindDirectConversionRate(const string from, const string to, double &rate)
    return false;
 }
 
+// Attempts to resolve conversion symbol directly.
 bool TryDirectConversionSymbol(const string symbol, const string from, const string to, double &rate)
 {
    if(StringLen(symbol) == 0)
@@ -289,6 +303,7 @@ bool TryDirectConversionSymbol(const string symbol, const string from, const str
    return false;
 }
 
+// Estimates emergency ATR percentage.
 bool EstimateEmergencyATRPct(const string symbol, double &atr_pct)
 {
    atr_pct = 0.0;
@@ -320,6 +335,7 @@ bool EstimateEmergencyATRPct(const string symbol, double &atr_pct)
    return true;
 }
 
+// Gets the best analytical mid price for the symbol.
 bool GetAnalyticalMidPrice(const string symbol, double &mid)
 {
    MqlTick tick;
@@ -351,6 +367,7 @@ bool GetAnalyticalMidPrice(const string symbol, double &mid)
    return false;
 }
 
+// Gets the live mid price from the current tick.
 bool GetMidPrice(const string symbol, MqlTick &tick, double &mid)
 {
    if(!SymbolInfoTick(symbol, tick) || tick.bid <= 0.0 || tick.ask <= 0.0)
@@ -360,6 +377,7 @@ bool GetMidPrice(const string symbol, MqlTick &tick, double &mid)
    return (mid > 0.0);
 }
 
+// Solves a dense linear system with Gaussian elimination.
 bool SolveLinearSystem(const double &Ain[], const double &bin[], double &x[], const int n)
 {
    double A[];
@@ -431,6 +449,7 @@ bool SolveLinearSystem(const double &Ain[], const double &bin[], double &x[], co
    return true;
 }
 
+// Computes a Pearson correlation from flattened return history.
 double PearsonCorrFlat(const double &hist[], const int idx1, const int idx2, const int len, const int row_len)
 {
    double sum_x = 0.0, sum_y = 0.0;
@@ -458,6 +477,7 @@ double PearsonCorrFlat(const double &hist[], const int idx1, const int idx2, con
    return Clip(num / den, -1.0, 1.0);
 }
 
+// Returns the lowest close in the requested range.
 double LowestClose(const double &close[], const int from_shift, const int to_shift)
 {
    double v = DBL_MAX;
@@ -466,6 +486,7 @@ double LowestClose(const double &close[], const int from_shift, const int to_shi
    return v;
 }
 
+// Returns the highest close in the requested range.
 double HighestClose(const double &close[], const int from_shift, const int to_shift)
 {
    double v = -DBL_MAX;
@@ -474,6 +495,7 @@ double HighestClose(const double &close[], const int from_shift, const int to_sh
    return v;
 }
 
+// Calculates ATR as a fraction of price from the supplied rates.
 double ATRPctFromRates(const MqlRates &rates[], const int window)
 {
    double sum_tr = 0.0;
@@ -495,6 +517,7 @@ double ATRPctFromRates(const MqlRates &rates[], const int window)
    return MathMax((sum_tr / (double)count) / rates[1].close, EPS());
 }
 
+// Computes an EWMA standard deviation from close-to-close returns.
 double EWMAStdFromCloses(const double &close[], const int returns_count, const int half_life)
 {
    double lambda = MathExp(-MathLog(2.0) / MathMax(1.0, (double)half_life));
@@ -522,6 +545,7 @@ double EWMAStdFromCloses(const double &close[], const int returns_count, const i
 }
 
 //------------------------- Startup And Universe Setup -------------------------//
+// Initializes arrays.
 bool InitArrays()
 {
    if(g_num_symbols < 1)
@@ -652,6 +676,7 @@ bool InitArrays()
    return true;
 }
 
+// Initializes tradable symbols.
 bool InitTradableSymbols()
 {
    ArrayResize(g_trade_allowed, g_num_symbols);
@@ -700,6 +725,7 @@ bool InitTradableSymbols()
    return true;
 }
 
+// Parses symbols.
 bool ParseSymbols()
 {
    ArrayFree(g_symbols);
@@ -786,6 +812,7 @@ bool ParseSymbols()
    return (g_num_symbols >= 1);
 }
 
+// Validates inputs.
 bool ValidateInputs()
 {
    if(InpMagicNumber <= 0)
@@ -1064,6 +1091,7 @@ bool ValidateInputs()
    return true;
 }
 
+// Inspects history readiness for the requested symbol and timeframe.
 bool InspectSymbolHistory(const string symbol,
                          const ENUM_TIMEFRAMES timeframe,
                          const int bars_needed,
@@ -1102,6 +1130,7 @@ bool InspectSymbolHistory(const string symbol,
    return true;
 }
 
+// Loads rates window.
 bool LoadRatesWindow(const string symbol,
                      const ENUM_TIMEFRAMES timeframe,
                      const int bars_needed,
@@ -1125,6 +1154,7 @@ bool LoadRatesWindow(const string symbol,
    return true;
 }
 
+// Gets the latest available bar time for the series.
 bool GetLatestSeriesBarTime(const string symbol, const ENUM_TIMEFRAMES timeframe, datetime &bar_time)
 {
    bar_time = 0;
@@ -1141,6 +1171,7 @@ bool GetLatestSeriesBarTime(const string symbol, const ENUM_TIMEFRAMES timeframe
    return (bar_time > 0);
 }
 
+// Logs startup step.
 void LogStartupStep(const int step,
                     const int total_steps,
                     const string label,
@@ -1156,17 +1187,20 @@ void LogStartupStep(const int step,
       PrintFormat("FXRC startup Step %d/%d - %s - %s", step, total_steps, label, status);
 }
 
+// Returns whether startup-step logging is enabled.
 bool StartupDebugEnabled()
 {
    return (InpDebugStartupSequence && !MQLInfoInteger(MQL_TESTER));
 }
 
+// Returns whether the runtime is ready to process the model.
 bool RuntimeCanProcessModel()
 {
    return (g_runtime_state.status == FXRC_RUNTIME_READY && g_runtime_state.ready_symbols > 0);
 }
 
 //------------------------- Core Helpers -------------------------//
+// Returns whether two symbols share the same class overlap.
 bool SameClassOverlap(const int i,const int j)
 {
    if(i == j || SharesCurrency(i, j))
@@ -1182,6 +1216,7 @@ bool SameClassOverlap(const int i,const int j)
    return false;
 }
 
+// Returns whether the pair touches the requested currency bloc.
 bool PairTouchesCurrencyBloc(const int idx, const int bloc_id)
 {
    if(!IsForexSymbolIndex(idx))
@@ -1200,21 +1235,25 @@ bool PairTouchesCurrencyBloc(const int idx, const int bloc_id)
    return false;
 }
 
+// Returns whether the currency belongs to the funding bloc.
 bool IsFundingBlocCurrency(const string ccy)
 {
    return (ccy == "JPY" || ccy == "CHF" || ccy == "EUR");
 }
 
+// Returns whether the currency belongs to the European bloc.
 bool IsEuropeanBlocCurrency(const string ccy)
 {
    return (ccy == "EUR" || ccy == "GBP" || ccy == "CHF" || ccy == "SEK" || ccy == "NOK");
 }
 
+// Returns whether the currency belongs to the commodity bloc.
 bool IsCommodityBlocCurrency(const string ccy)
 {
    return (ccy == "AUD" || ccy == "NZD" || ccy == "CAD" || ccy == "NOK");
 }
 
+// Returns whether two tracked symbols share a currency.
 bool SharesCurrency(const int i,const int j)
 {
    if(!IsForexSymbolIndex(i) || !IsForexSymbolIndex(j))
@@ -1227,6 +1266,7 @@ bool SharesCurrency(const int i,const int j)
    return false;
 }
 
+// Returns whether the tracked index points to a forex symbol.
 bool IsForexSymbolIndex(const int i)
 {
    if(i < 0 || i >= g_num_symbols)
@@ -1234,6 +1274,7 @@ bool IsForexSymbolIndex(const int i)
    return (StringLen(g_base_ccy[i]) == 3 && StringLen(g_quote_ccy[i]) == 3);
 }
 
+// Returns whether trading is allowed for the tracked symbol index.
 bool IsTradeAllowed(const int idx)
 {
    if(idx < 0 || idx >= g_num_symbols)
@@ -1243,6 +1284,7 @@ bool IsTradeAllowed(const int idx)
    return g_trade_allowed[idx];
 }
 
+// Finds tracked symbol index.
 int FindTrackedSymbolIndex(const string symbol)
 {
    for(int i=0; i<g_num_symbols; ++i)
@@ -1253,6 +1295,7 @@ int FindTrackedSymbolIndex(const string symbol)
    return -1;
 }
 
+// Returns whether the symbol already exists in the list.
 bool SymbolAlreadyListed(const string &symbols[], const int count, const string symbol)
 {
    for(int i=0; i<count; ++i)
@@ -1263,11 +1306,13 @@ bool SymbolAlreadyListed(const string &symbols[], const int count, const string 
    return false;
 }
 
+// Returns whether the symbol represents a forex position.
 bool IsForexPositionSymbol(const string symbol)
 {
    return (StringLen(symbol) > 0 && IsForexPairSymbol(symbol));
 }
 
+// Returns whether the symbol represents a forex pair.
 bool IsForexPairSymbol(const string symbol)
 {
    string base = SymbolInfoString(symbol, SYMBOL_CURRENCY_BASE);
@@ -1279,11 +1324,13 @@ bool IsForexPairSymbol(const string symbol)
    return (calc_mode == SYMBOL_CALC_MODE_FOREX || calc_mode == SYMBOL_CALC_MODE_FOREX_NO_LEVERAGE);
 }
 
+// Returns whether two symbol names normalize to the same value.
 bool SymbolNamesEqual(const string a, const string b)
 {
    return (NormalizedSymbolName(a) == NormalizedSymbolName(b));
 }
 
+// Returns normalized symbol name.
 string NormalizedSymbolName(const string symbol)
 {
    string out = symbol;
@@ -1293,11 +1340,13 @@ string NormalizedSymbolName(const string symbol)
    return out;
 }
 
+// Selects and sync symbol.
 bool SelectAndSyncSymbol(const string symbol)
 {
    return SymbolSelect(symbol, true);
 }
 
+// Returns whether the trade retcode should be retried.
 bool IsTradeRetcodeRetryable(const uint retcode)
 {
    return (retcode == TRADE_RETCODE_REQUOTE
@@ -1309,12 +1358,14 @@ bool IsTradeRetcodeRetryable(const uint retcode)
         || retcode == TRADE_RETCODE_LOCKED);
 }
 
+// Returns whether the trade-check retcode indicates success.
 bool IsTradeCheckRetcodeSuccess(const uint retcode)
 {
    // OrderCheck() uses 0 to signal a successful pre-trade validation.
    return (retcode == 0 || IsTradeRetcodeSuccess(retcode));
 }
 
+// Returns whether the trade retcode indicates success.
 bool IsTradeRetcodeSuccess(const uint retcode)
 {
    return (retcode == TRADE_RETCODE_DONE
@@ -1323,6 +1374,7 @@ bool IsTradeRetcodeSuccess(const uint retcode)
         || retcode == TRADE_RETCODE_NO_CHANGES);
 }
 
+// Normalizes volume.
 double NormalizeVolume(const string symbol, const double requested)
 {
    double minv = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
@@ -1339,6 +1391,7 @@ double NormalizeVolume(const string symbol, const double requested)
    return NormalizeDouble(v, VolumeDigits(step));
 }
 
+// Returns the amount of decimal digits needed for the volume step.
 int VolumeDigits(const double step)
 {
    int d = 0;
@@ -1351,17 +1404,20 @@ int VolumeDigits(const double step)
    return d;
 }
 
+// Normalizes price.
 double NormalizePrice(const string symbol, const double price)
 {
    int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
    return NormalizeDouble(price, digits);
 }
 
+// Logs dependency transition.
 void LogDependencyTransition(const string message)
 {
    PrintFormat("FXRC dependency: %s", message);
 }
 
+// Logs runtime state if needed.
 void LogRuntimeStateIfNeeded(const bool force)
 {
    string key = RuntimeStatusToString(g_runtime_state.status) + "|" + g_runtime_state.reason;
@@ -1387,6 +1443,7 @@ void LogRuntimeStateIfNeeded(const bool force)
    g_runtime_state.last_log_time = now;
 }
 
+// Sets the runtime status and reason fields.
 void SetRuntimeStatus(const ENUM_FXRC_RUNTIME_STATUS status,
                       const string reason,
                       const int ready_symbols,
@@ -1400,6 +1457,7 @@ void SetRuntimeStatus(const ENUM_FXRC_RUNTIME_STATUS status,
    g_runtime_state.latest_chart_bar = latest_chart_bar;
 }
 
+// Resets dependency runtime state.
 void ResetDependencyRuntimeState(FXRCDependencyRuntimeState &state)
 {
    state.status = FXRC_DEPENDENCY_HEALTHY;
@@ -1411,6 +1469,7 @@ void ResetDependencyRuntimeState(FXRCDependencyRuntimeState &state)
    state.flatten_triggered = false;
 }
 
+// Resets runtime state.
 void ResetRuntimeState(FXRCRuntimeState &state)
 {
    state.status = FXRC_RUNTIME_STARTING;
@@ -1422,6 +1481,7 @@ void ResetRuntimeState(FXRCRuntimeState &state)
    state.last_log_key = "";
 }
 
+// Resets history check.
 void ResetHistoryCheck(FXRCHistoryCheck &check)
 {
    check.feed_ready = false;
@@ -1431,6 +1491,7 @@ void ResetHistoryCheck(FXRCHistoryCheck &check)
    check.reason = "";
 }
 
+// Formats a dependency runtime state as text.
 string DependencyStateToString(const ENUM_FXRC_DEPENDENCY_STATE status)
 {
    switch(status)
@@ -1443,6 +1504,7 @@ string DependencyStateToString(const ENUM_FXRC_DEPENDENCY_STATE status)
    return "unknown";
 }
 
+// Formats a runtime status as text.
 string RuntimeStatusToString(const ENUM_FXRC_RUNTIME_STATUS status)
 {
    switch(status)
@@ -1455,6 +1517,7 @@ string RuntimeStatusToString(const ENUM_FXRC_RUNTIME_STATUS status)
    return "unknown";
 }
 
+// Formats a datetime value for logging.
 string FormatTimeValue(const datetime value)
 {
    if(value <= 0)
@@ -1462,6 +1525,7 @@ string FormatTimeValue(const datetime value)
    return TimeToString(value, TIME_DATE | TIME_MINUTES);
 }
 
+// Returns the amount of signal-bar history required by the model.
 int SignalBarsNeeded()
 {
    int ret_hist_len = g_ret_hist_len;
@@ -1476,56 +1540,67 @@ int SignalBarsNeeded()
    return bars_needed + 100;
 }
 
+// Returns the positive-only tanh-like transform.
 double TanhLikePositive(const double x)
 {
    return (2.0 * Sigmoid(2.0 * MathMax(x, 0.0)) - 1.0);
 }
 
+// Returns whether classic session reset active.
 bool IsClassicSessionResetActive()
 {
    return (IsClassicTradeModel() && InpClassicSessionResetProfitUSD > 0.0);
 }
 
+// Returns whether classic trailing active.
 bool IsClassicTrailingActive()
 {
    return (IsClassicTradeModel() && InpClassicUseTrailingStop != 0 && InpClassicSinglePositionTakeProfitUSD > 0.0);
 }
 
+// Returns whether classic take profit active.
 bool IsClassicTakeProfitActive()
 {
    return (IsClassicTradeModel() && InpClassicUseTrailingStop == 0 && InpClassicSinglePositionTakeProfitUSD > 0.0);
 }
 
+// Returns whether modern trade model.
 bool IsModernTradeModel()
 {
    return (Trade_Model == FXRC_TRADE_MODEL_MODERN);
 }
 
+// Returns whether classic trade model.
 bool IsClassicTradeModel()
 {
    return (Trade_Model == FXRC_TRADE_MODEL_CLASSIC);
 }
 
+// Returns whether value signal requires PPP data.
 bool ValueSignalRequiresPPPData()
 {
    return (InpValueModel == FXRC_VALUE_MODEL_PPP && !InpPPPAllowProxyFallback);
 }
 
+// Returns whether carry signal requires external data.
 bool CarrySignalRequiresExternalData()
 {
    return (InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF && !InpCarryAllowBrokerFallback);
 }
 
+// Returns whether carry model uses external.
 bool CarryModelUsesExternal()
 {
    return (InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF);
 }
 
+// Returns whether value model uses PPP.
 bool ValueModelUsesPPP()
 {
    return (InpValueModel == FXRC_VALUE_MODEL_PPP || InpValueModel == FXRC_VALUE_MODEL_HYBRID);
 }
 
+// Returns the best available server-aligned timestamp.
 datetime SafeNow()
 {
    datetime now = TimeTradeServer();
@@ -1534,6 +1609,7 @@ datetime SafeNow()
    return now;
 }
 
+// Maps a position type into a signed direction.
 int PositionDirFromType(const long type)
 {
    if(type == POSITION_TYPE_BUY)  return 1;
@@ -1541,6 +1617,7 @@ int PositionDirFromType(const long type)
    return 0;
 }
 
+// Returns whether symbol data stale.
 bool IsSymbolDataStale(const int idx)
 {
    return (idx >= 0
@@ -1548,6 +1625,7 @@ bool IsSymbolDataStale(const int idx)
         && g_symbol_data_stale[idx]);
 }
 
+// Returns whether cross sectionally eligible symbol.
 bool IsCrossSectionallyEligibleSymbol(const int idx)
 {
    return (idx >= 0
@@ -1556,6 +1634,7 @@ bool IsCrossSectionallyEligibleSymbol(const int idx)
         && !IsSymbolDataStale(idx));
 }
 
+// Returns the long, short, or fallback value for the requested direction.
 double DirectionalValue(const int dir, const double long_value, const double short_value, const double fallback_value)
 {
    if(dir > 0)
@@ -1565,11 +1644,13 @@ double DirectionalValue(const int dir, const double long_value, const double sho
    return fallback_value;
 }
 
+// Returns whether directional long.
 bool IsDirectionalLong(const int dir)
 {
    return (dir > 0);
 }
 
+// Returns the sign of the supplied double value.
 int SignD(const double x)
 {
    if(x > 0.0) return 1;
@@ -1577,6 +1658,7 @@ int SignD(const double x)
    return 0;
 }
 
+// Returns the sigmoid transform of the supplied value.
 double Sigmoid(const double x)
 {
    if(x >= 0.0)
@@ -1589,11 +1671,13 @@ double Sigmoid(const double x)
    return e / (1.0 + e);
 }
 
+// Returns the positive part of the supplied value.
 double PosPart(const double x)
 {
    return (x > 0.0 ? x : 0.0);
 }
 
+// Clamps a value into the requested range.
 double Clip(const double x,const double lo,const double hi)
 {
    if(x < lo) return lo;
@@ -1601,11 +1685,13 @@ double Clip(const double x,const double lo,const double hi)
    return x;
 }
 
+// Returns the flattened matrix index for row-major storage.
 int MatIdx(const int i,const int j,const int n)
 {
    return i * n + j;
 }
 
+// Resets execution snapshot.
 void ResetExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
 {
    snapshot.open_risk_cash = 0.0;
@@ -1615,6 +1701,7 @@ void ResetExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
    snapshot.all_protected = true;
 }
 
+// Resets symbol execution state.
 void ResetSymbolExecutionState(FXRCSymbolExecutionState &state)
 {
    state.dir = 0;
@@ -1624,6 +1711,7 @@ void ResetSymbolExecutionState(FXRCSymbolExecutionState &state)
    state.account_active_orders = 0;
 }
 
+// Resets trade plan.
 void ResetTradePlan(FXRCTradePlan &plan)
 {
    plan.symbol = "";
@@ -1640,6 +1728,7 @@ void ResetTradePlan(FXRCTradePlan &plan)
    plan.covariance_multiplier = 1.0;
 }
 
+// Resets PPP cache state.
 void ResetPPPCacheState(FXRCPPPCacheState &state)
 {
    state.loaded = false;
@@ -1652,6 +1741,7 @@ void ResetPPPCacheState(FXRCPPPCacheState &state)
    state.reason = "";
 }
 
+// Resets carry cache state.
 void ResetCarryCacheState(FXRCCarryCacheState &state)
 {
    state.loaded = false;
@@ -1664,6 +1754,7 @@ void ResetCarryCacheState(FXRCCarryCacheState &state)
    state.reason = "";
 }
 
+// Attempts to convert cash.
 bool TryConvertCash(const string from_ccy, const string to_ccy, const double amount, double &converted)
 {
    converted = 0.0;
@@ -1691,6 +1782,7 @@ bool TryConvertCash(const string from_ccy, const string to_ccy, const double amo
    return false;
 }
 
+// Clears conversion failure state.
 void ClearConversionFailureState()
 {
    g_conversion_error_active = false;
@@ -1698,6 +1790,7 @@ void ClearConversionFailureState()
    g_conversion_error_logged = false;
 }
 
+// Activates the conversion-failure state for the requested currencies.
 void ActivateConversionFailure(const string from_ccy, const string to_ccy)
 {
    g_conversion_error_active = true;
@@ -1709,4 +1802,5 @@ void ActivateConversionFailure(const string from_ccy, const string to_ccy)
    }
 }
 
+// Returns the small epsilon used for numeric guards.
 double EPS() { return 1e-10; }
