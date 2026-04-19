@@ -1,6 +1,6 @@
 # FX7
 
-`FX7.mq5` is a multi-symbol MetaTrader 5 Expert Advisor for FX portfolio trading on closed-bar signals. It combines trend, carry, and value inputs with portfolio-level diversification, execution gating, and fail-safe runtime controls.
+`FX7` is a multi-symbol MetaTrader 5 Expert Advisor for FX portfolio trading on closed-bar signals. It combines trend, carry, and value inputs with portfolio-level diversification, execution gating, and fail-safe runtime controls.
 
 ## Benefits
 
@@ -9,7 +9,7 @@
 - Stronger risk controls. Regime gating, panic gating, cost gating, catastrophic stops, account/order caps, and margin/risk limits are enforced before entries are sent.
 - Safer live operation. Event-assisted trade-state verification, dependency failure policies, stale-data isolation, synchronized bar processing, and a no-trade-on-attach option make live deployment less fragile.
 - Cleaner execution quality. Retry logic refreshes both quote and protective stop, not just the entry price, so risk geometry stays closer to plan during fast moves.
-- Better behavior under degraded data. External carry/PPP dependencies can freeze entries, flatten exposure, or continue with stale inputs based on explicit policy settings.
+- Better behavior under degraded data. Carry/PPP dependencies are rebuilt in memory at EA startup and can freeze entries, flatten exposure, or continue with stale inputs based on explicit policy settings.
 
 ## Strategy Summary
 
@@ -21,22 +21,36 @@
 
 ## Repository Contents
 
-- [FX7.mq5](https://github.com/Pummelchen/FX7/blob/main/FX7.mq5): main EA source
+- [FX7.mq5](https://github.com/Pummelchen/FX7/blob/main/FX7.mq5): thin entry wrapper that includes the modular source tree
+- `src/FX7Inputs.mqh`: all `input` parameters and public EA enums
+- `src/FX7TypesAndGlobals.mqh`: shared structs, cache state, globals, and runtime layout notes
+- `src/FX7Events.mqh`: `OnInit`, `OnTick`, `OnTimer`, `OnTradeTransaction`, and runtime orchestration
+- `src/FX7TradeExecution.mqh`: trade planning, request construction, send/retry, and verification logic
+- `src/FX7Signals.mqh`: portfolio ranking, novelty, crowding, and candidate selection
+- `src/FX7FeaturePipeline.mqh`: symbol-level feature computation, value/carry integration, and sleeve blending
+- `src/FX7MacroData.mqh`: startup-built carry/PPP cache creation, dependency health, and macro lookup helpers
+- `src/FX7Core.mqh`: validation, reset helpers, conversions, and shared utility functions
 
 ## Data Requirements
 
 FX7 can run with different dependency profiles:
 
-- Pure momentum mode: no external macro files required
-- External carry mode: provide `FXRC_CarryRates.csv`
-- PPP or hybrid value mode: provide `FXRC_PPP_CPI.csv`
+- Pure momentum mode: no macro dependency required
+- Carry mode: the EA builds an in-memory rate-differential cache during startup
+- PPP or hybrid value mode: the EA builds an in-memory CPI/PPP cache during startup
 
-File location is controlled by:
+No external CSV files are used anymore. At startup the EA:
 
-- `InpCarryUseCommonFile`
-- `InpPPPUseCommonFile`
+- pulls economic-calendar history for the currencies used by `InpSymbols`
+- reshapes carry into a monthly forward-filled series and PPP into a monthly CPI-style index path
+- falls back to built-in major-currency profiles if calendar data is missing
+- keeps the existing dependency health checks, freeze/flatten policy, and freshness controls
 
-When these are `false`, place files in the terminal `MQL5/Files` folder. When `true`, place them in the terminal common files folder.
+If you enable carry or PPP modes for currencies that are neither covered by the terminal economic calendar nor the built-in fallback profiles, FX7 will treat that as a dependency failure and apply the configured runtime policy.
+
+## Installation
+
+Copy the full `FX7` folder into `MQL5/Experts/FX7/` so MetaEditor can resolve `FX7.mq5` plus the `src/*.mqh` includes, then compile `FX7.mq5`.
 
 ## Recommended Live Defaults
 
@@ -54,4 +68,4 @@ When these are `false`, place files in the terminal `MQL5/Files` folder. When `t
 
 ## Validation
 
-This packaged release was compiled successfully in MetaEditor with `0 errors, 0 warnings`.
+This refactor was compiled successfully in MetaEditor with `0 errors, 0 warnings`.
