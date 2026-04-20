@@ -6,14 +6,14 @@
 #property strict
 #property version   "7.00"
 
-#include "src/FX7Inputs.mqh"
-#include "src/FX7TypesAndGlobals.mqh"
-#include "src/FX7Events.mqh"
-#include "src/FX7TradeExecution.mqh"
-#include "src/FX7Signals.mqh"
-#include "src/FX7FeaturePipeline.mqh"
-#include "src/FX7MacroData.mqh"
-#include "src/FX7Core.mqh"
+#include "FX7/Inputs/Inputs.mqh"
+#include "FX7/TypesAndGlobals/TypesAndGlobals.mqh"
+#include "FX7/Events/Events.mqh"
+#include "FX7/TradeExecution/TradeExecution.mqh"
+#include "FX7/Signals/Signals.mqh"
+#include "FX7/FeaturePipeline/FeaturePipeline.mqh"
+#include "FX7/MacroData/MacroData.mqh"
+#include "FX7/Core/Core.mqh"
 
 // Routes terminal initialization into the modular runtime implementation.
 int OnInit()

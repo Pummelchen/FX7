@@ -22,14 +22,14 @@
 ## Repository Contents
 
 - [FX7.mq5](https://github.com/Pummelchen/FX7/blob/main/FX7.mq5): thin entry wrapper that includes the modular source tree
-- `src/FX7Inputs.mqh`: all `input` parameters and public EA enums
-- `src/FX7TypesAndGlobals.mqh`: shared structs, cache state, globals, and runtime layout notes
-- `src/FX7Events.mqh`: `OnInit`, `OnTick`, `OnTimer`, `OnTradeTransaction`, and runtime orchestration
-- `src/FX7TradeExecution.mqh`: trade planning, request construction, send/retry, and verification logic
-- `src/FX7Signals.mqh`: portfolio ranking, novelty, crowding, and candidate selection
-- `src/FX7FeaturePipeline.mqh`: symbol-level feature computation, value/carry integration, and sleeve blending
-- `src/FX7MacroData.mqh`: startup-built carry/PPP cache creation, dependency health, and macro lookup helpers
-- `src/FX7Core.mqh`: validation, reset helpers, conversions, and shared utility functions
+- `FX7/Inputs/Inputs.mqh`: all `input` parameters and public EA enums
+- `FX7/TypesAndGlobals/TypesAndGlobals.mqh`: shared structs, cache state, globals, and runtime layout notes
+- `FX7/Events/Events.mqh`: `OnInit`, `OnTick`, `OnTimer`, `OnTradeTransaction`, and runtime orchestration
+- `FX7/TradeExecution/TradeExecution.mqh`: trade planning, request construction, send/retry, and verification logic
+- `FX7/Signals/Signals.mqh`: portfolio ranking, novelty, crowding, and candidate selection
+- `FX7/FeaturePipeline/FeaturePipeline.mqh`: symbol-level feature computation, value/carry integration, and sleeve blending
+- `FX7/MacroData/MacroData.mqh`: startup-built carry/PPP cache creation, dependency health, and macro lookup helpers
+- `FX7/Core/Core.mqh`: validation, reset helpers, conversions, and shared utility functions
 
 ## Data Requirements
 
@@ -50,7 +50,7 @@ If you enable carry or PPP modes for currencies that are neither covered by the 
 
 ## Installation
 
-Copy the full `FX7` folder into `MQL5/Experts/FX7/` so MetaEditor can resolve `FX7.mq5` plus the `src/*.mqh` includes, then compile `FX7.mq5`.
+Copy the full `FX7` folder into `MQL5/Experts/FX7/` so MetaEditor can resolve `FX7.mq5` plus the `FX7/<Module>/<Module>.mqh` includes, then compile `FX7.mq5`.
 
 ## Recommended Live Defaults
 
