@@ -97,13 +97,19 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
    double signal_px = close[1];
    if(signal_px <= 0.0)
       signal_px = mid_px;
-   datetime signal_time = rates[1].time;
+   // Use the decision timestamp at the new-bar open, not the prior bar's open time.
+   datetime signal_time = rates[0].time;
+   if(signal_time <= 0)
+      signal_time = rates[1].time;
 
    double carry_signal = 0.0;
    double carry_spread = 0.0;
    datetime carry_macro_date = 0;
    string carry_reason;
-   bool carry_ok = ComputeCarrySignal(sym, signal_px, signal_time, carry_signal, carry_spread, carry_macro_date, carry_reason);
+   bool carry_ok = true;
+   if(CarrySleeveEnabled())
+      carry_ok = ComputeCarrySignal(sym, signal_px, signal_time, carry_signal, carry_spread, carry_macro_date, carry_reason);
+
    if(!carry_ok)
    {
       if(CarrySignalRequiresExternalData())
@@ -133,9 +139,12 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
    double value_ppp_weight = 0.0;
    double value_reliability = 0.0;
    string value_reason;
-   bool value_ok = ResolveValueSignal(sym, signal_px, signal_time,
-                                      value_signal, value_gap, value_proxy_signal, value_ppp_signal,
-                                      value_fair_px, value_macro_date, value_ppp_weight, value_reliability, value_reason, g_V[i]);
+   bool value_ok = true;
+   if(ValueSleeveEnabled())
+      value_ok = ResolveValueSignal(sym, signal_px, signal_time,
+                                    value_signal, value_gap, value_proxy_signal, value_ppp_signal,
+                                    value_fair_px, value_macro_date, value_ppp_weight, value_reliability, value_reason, g_V[i]);
+
    if(!value_ok)
    {
       if(ValueSignalRequiresPPPData())
@@ -872,4 +881,3 @@ double SlowEWMALogAnchorNewestFirst(const double &close[], const int newest_shif
 
    return anchor;
 }
-

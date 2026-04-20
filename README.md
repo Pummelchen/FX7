@@ -36,8 +36,8 @@
 FX7 can run with different dependency profiles:
 
 - Pure momentum mode: no macro dependency required
-- Carry mode: the EA builds an in-memory rate-differential cache during startup
-- PPP or hybrid value mode: the EA builds an in-memory CPI/PPP cache during startup
+- Carry mode: when the carry sleeve has a positive weight and uses rate differentials, the EA builds an in-memory rate-differential cache during startup
+- PPP or hybrid value mode: when the value sleeve has a positive weight and the selected value model uses PPP, the EA builds an in-memory CPI/PPP cache during startup
 
 No external CSV files are used anymore. At startup the EA:
 
@@ -47,6 +47,8 @@ No external CSV files are used anymore. At startup the EA:
 - keeps the existing dependency health checks, freeze/flatten policy, and freshness controls
 
 If you enable carry or PPP modes for currencies that are neither covered by the terminal economic calendar nor the built-in fallback profiles, FX7 will treat that as a dependency failure and apply the configured runtime policy.
+
+`InpMaxAccountOrders` is enforced against all currently open account positions plus pending orders, not just FX7-owned trades.
 
 ## Installation
 

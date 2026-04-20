@@ -57,13 +57,13 @@ int FX7HandleInit()
    }
    LogStartupStep(7, total_steps, "Build EUR reference notional", "Done", DoubleToString(g_reference_eur_notional, 2));
 
-   if(InpCarryModel != FXRC_CARRY_MODEL_RATE_DIFF || InpCarryAllowBrokerFallback)
+   if(CarrySleeveEnabled() && (InpCarryModel != FXRC_CARRY_MODEL_RATE_DIFF || InpCarryAllowBrokerFallback))
    {
       PrintFormat("FXRC startup warning: carry model is %s with broker fallback=%s. Pure external carry is not enforced.",
                   EnumToString(InpCarryModel),
                   (InpCarryAllowBrokerFallback ? "true" : "false"));
    }
-   if(InpValueModel != FXRC_VALUE_MODEL_PPP || InpPPPAllowProxyFallback)
+   if(ValueSleeveEnabled() && (InpValueModel != FXRC_VALUE_MODEL_PPP || InpPPPAllowProxyFallback))
    {
       PrintFormat("FXRC startup warning: value model is %s with PPP proxy fallback=%s. Pure PPP value is not enforced, the proxy leg is only a statistical anchor, and value is treated as a slow reliability-scaled bias rather than a primary intraday alpha.",
                   EnumToString(InpValueModel),
@@ -660,15 +660,35 @@ bool RefreshRuntimeState(const bool force_log)
    bool chart_ready = InspectSymbolHistory(_Symbol, (ENUM_TIMEFRAMES)_Period, 1, true, chart_check);
    int ready_symbols = 0;
    int bars_needed = SignalBarsNeeded();
+   int value_bars_needed = ValueBarsNeeded();
 
    for(int i=0; i<g_num_symbols; ++i)
    {
       FXRCHistoryCheck symbol_check;
-      bool symbol_ready = InspectSymbolHistory(g_symbols[i], InpSignalTF, bars_needed, MQLInfoInteger(MQL_TESTER), symbol_check);
+      bool signal_ready = InspectSymbolHistory(g_symbols[i], InpSignalTF, bars_needed, MQLInfoInteger(MQL_TESTER), symbol_check);
+
+      bool symbol_ready = signal_ready;
+      string history_reason = symbol_check.reason;
+      datetime latest_history_bar = symbol_check.latest_bar;
+      int bars_available = symbol_check.bars_available;
+
+      if(symbol_ready && ValueSleeveEnabled())
+      {
+         FXRCHistoryCheck value_check;
+         bool value_ready = InspectSymbolHistory(g_symbols[i], InpValueTF, value_bars_needed, MQLInfoInteger(MQL_TESTER), value_check);
+         if(!value_ready)
+         {
+            symbol_ready = false;
+            history_reason = value_check.reason;
+            latest_history_bar = value_check.latest_bar;
+            bars_available = value_check.bars_available;
+         }
+      }
+
       g_symbol_history_ready[i] = symbol_ready;
-      g_symbol_latest_history_bar[i] = symbol_check.latest_bar;
-      g_symbol_history_bars[i] = symbol_check.bars_available;
-      g_symbol_history_reason[i] = symbol_check.reason;
+      g_symbol_latest_history_bar[i] = latest_history_bar;
+      g_symbol_history_bars[i] = bars_available;
+      g_symbol_history_reason[i] = history_reason;
       if(symbol_ready)
          ready_symbols++;
    }

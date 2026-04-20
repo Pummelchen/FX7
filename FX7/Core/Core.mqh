@@ -1540,6 +1540,12 @@ int SignalBarsNeeded()
    return bars_needed + 100;
 }
 
+// Returns the amount of value-timeframe history required by the model.
+int ValueBarsNeeded()
+{
+   return MathMax(InpValueLookbackBars + 5, 3);
+}
+
 // Returns the positive-only tanh-like transform.
 double TanhLikePositive(const double x)
 {
@@ -1576,28 +1582,60 @@ bool IsClassicTradeModel()
    return (Trade_Model == FXRC_TRADE_MODEL_CLASSIC);
 }
 
+// Returns whether the carry sleeve is enabled.
+bool CarrySleeveEnabled()
+{
+   return (InpWeightCarry > EPS());
+}
+
+// Returns whether the value sleeve is enabled.
+bool ValueSleeveEnabled()
+{
+   return (InpWeightValue > EPS());
+}
+
 // Returns whether value signal requires PPP data.
 bool ValueSignalRequiresPPPData()
 {
-   return (InpValueModel == FXRC_VALUE_MODEL_PPP && !InpPPPAllowProxyFallback);
+   if(!ValueSleeveEnabled())
+      return false;
+
+   if(InpValueModel == FXRC_VALUE_MODEL_PPP)
+      return !InpPPPAllowProxyFallback;
+
+   if(InpValueModel == FXRC_VALUE_MODEL_HYBRID)
+      return (InpPPPBlendWeight > EPS() && InpProxyBlendWeight <= EPS());
+
+   return false;
 }
 
 // Returns whether carry signal requires external data.
 bool CarrySignalRequiresExternalData()
 {
-   return (InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF && !InpCarryAllowBrokerFallback);
+   return (CarrySleeveEnabled()
+        && InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF
+        && !InpCarryAllowBrokerFallback);
 }
 
 // Returns whether carry model uses external.
 bool CarryModelUsesExternal()
 {
-   return (InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF);
+   return (CarrySleeveEnabled() && InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF);
 }
 
 // Returns whether value model uses PPP.
 bool ValueModelUsesPPP()
 {
-   return (InpValueModel == FXRC_VALUE_MODEL_PPP || InpValueModel == FXRC_VALUE_MODEL_HYBRID);
+   if(!ValueSleeveEnabled())
+      return false;
+
+   if(InpValueModel == FXRC_VALUE_MODEL_PPP)
+      return true;
+
+   if(InpValueModel == FXRC_VALUE_MODEL_HYBRID)
+      return (InpPPPBlendWeight > EPS());
+
+   return false;
 }
 
 // Returns the best available server-aligned timestamp.

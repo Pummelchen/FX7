@@ -997,14 +997,14 @@ void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
       if(ticket == 0 || !PositionSelectByTicket(ticket))
          continue;
 
+      snapshot.account_active_orders++;
+
       if(!IsSelectedFXRCPosition())
          continue;
 
       string symbol = PositionGetString(POSITION_SYMBOL);
       if(!IsForexPositionSymbol(symbol))
          continue;
-
-      snapshot.account_active_orders++;
 
       long type = PositionGetInteger(POSITION_TYPE);
       int dir = PositionDirFromType(type);
@@ -1052,6 +1052,8 @@ void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
       if(ticket == 0 || !OrderSelect(ticket))
          continue;
 
+      snapshot.account_active_orders++;
+
       if(!IsSelectedFXRCOrder())
          continue;
 
@@ -1059,7 +1061,6 @@ void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
       if(!IsForexPairSymbol(symbol))
          continue;
 
-      snapshot.account_active_orders++;
       AccumulateTrackedOrderState(symbol);
    }
 }
@@ -1186,4 +1187,3 @@ bool IsFXRCMagic(const long magic)
 {
    return (magic == InpMagicNumber);
 }
-
