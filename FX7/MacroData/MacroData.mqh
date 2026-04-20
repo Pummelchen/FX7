@@ -810,9 +810,12 @@ bool ExtractCalendarActualValue(const MqlCalendarValue &value, double &actual)
 datetime CalendarValueRecordTime(const MqlCalendarValue &value)
 {
    datetime epoch_guard = D'1971.01.01';
-   if(value.period > epoch_guard)
-      return value.period;
-   return value.time;
+   // Calendar history queries and freshness checks operate on trade-server event times.
+   // Use the release timestamp as the availability key to avoid leaking inflation or
+   // rate observations into the series before the calendar actually published them.
+   if(value.time > epoch_guard)
+      return value.time;
+   return value.period;
 }
 
 // Builds the start time for macro-history requests.
