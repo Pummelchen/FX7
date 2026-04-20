@@ -243,11 +243,14 @@ bool ShouldExitManagedDirection(const int idx, const int current_dir)
    return (g_S[idx] >= -exit_threshold);
 }
 
-// Builds trade targets.
-void BuildTradeTargets(const int &candidate_indices[], int &target_dir[])
+// Builds trade targets and preserves the accepted-target priority order.
+void BuildTradeTargets(const int &candidate_indices[],
+                       int &target_dir[],
+                       int &accepted_order[])
 {
    ArrayResize(target_dir, g_num_symbols);
    ArrayInitialize(target_dir, 0);
+   ArrayResize(accepted_order, 0);
 
    FXRCCandidate ranked[];
    ArrayResize(ranked, 0);
@@ -297,6 +300,8 @@ void BuildTradeTargets(const int &candidate_indices[], int &target_dir[])
       ArrayResize(accepted, new_size);
       accepted[new_size - 1] = idx;
    }
+
+   ArrayCopy(accepted_order, accepted);
 }
 
 // Returns whether the candidate clears the reversal threshold.
@@ -540,4 +545,3 @@ void BuildUniverseStdRet()
       g_universe_stdret_hist[lag] = (valid > 0 ? s / (double)valid : 0.0);
    }
 }
-

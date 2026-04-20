@@ -15,8 +15,9 @@
 
 - Signal timeframe: `InpSignalTF` default `M15`
 - Alpha sleeves: momentum, carry, value
+- Macro sleeve role: carry and PPP/value are slower contextual inputs than the default intraday signal horizon, so momentum drives most short-horizon timing while macro sleeves bias ranking and conviction
 - Portfolio overlay: panic gate, correlation shrinkage, novelty ranking, uniqueness and crowding filters
-- Execution model: one managed position per symbol, closed-bar signal generation, immediate protective-stop enforcement
+- Execution model: one managed position per symbol, closed-bar signal generation, immediate protective-stop enforcement, and accepted-target execution in rank priority order
 - Trade styles: `Classic` and `Modern`
 
 ## Repository Contents
@@ -47,6 +48,8 @@ No external CSV files are used anymore. At startup the EA:
 - keeps the existing dependency health checks, freeze/flatten policy, and freshness controls
 
 If you enable carry or PPP modes for currencies that are neither covered by the terminal economic calendar nor the built-in fallback profiles, FX7 will treat that as a dependency failure and apply the configured runtime policy.
+
+Built-in carry/PPP fallback profiles are a safety net, not a substitute for calendar-backed macro history. For live use, prefer calendar coverage and treat fallback-backed macro sleeves as degraded-quality inputs that deserve explicit review.
 
 `InpMaxAccountOrders` is enforced against all currently open account positions plus pending orders, not just FX7-owned trades.
 

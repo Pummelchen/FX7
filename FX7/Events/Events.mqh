@@ -24,6 +24,9 @@ int CountTradableSymbols()
 // Logs startup warnings for the configured macro sleeves and dependency policy.
 void LogStartupConfigurationWarnings()
 {
+   int signal_seconds = PeriodSeconds(InpSignalTF);
+   int value_seconds = PeriodSeconds(InpValueTF);
+
    if(CarrySleeveEnabled()
       && (InpCarryModel != FXRC_CARRY_MODEL_RATE_DIFF
           || InpCarryAllowBrokerFallback))
@@ -50,12 +53,66 @@ void LogStartupConfigurationWarnings()
       );
    }
 
+   if(CarrySleeveEnabled()
+      && InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF
+      && signal_seconds > 0
+      && signal_seconds < PeriodSeconds(PERIOD_D1))
+   {
+      Print(
+         "FXRC startup note: rate-differential carry is rebuilt from macro "
+         + "data and typically evolves much more slowly than the configured "
+         + "intraday signal timeframe."
+      );
+   }
+
+   if(ValueSleeveEnabled()
+      && signal_seconds > 0
+      && value_seconds > signal_seconds)
+   {
+      Print(
+         "FXRC startup note: the value sleeve runs on a slower timeframe "
+         + "than entry signals and is intended as a slow contextual bias, "
+         + "not a primary intraday timing signal."
+      );
+   }
+
    if(DependenciesRequiredAtRuntime()
       && !InpFreezeEntriesOnDependencyFailure)
    {
       Print(
          "FXRC startup warning: degraded dependency mode will keep entries "
          + "enabled and continue on stale carry/PPP inputs until grace expiry."
+      );
+   }
+}
+
+// Returns whether the startup-built macro cache used built-in fallback data.
+bool CacheUsesBuiltInFallback(const string source_name)
+{
+   return (StringFind(source_name, "builtin") >= 0);
+}
+
+// Logs explicit warnings when built-in macro fallback data is active.
+void LogStartupMacroFallbackWarnings()
+{
+   if(MQLInfoInteger(MQL_TESTER))
+      return;
+
+   if(CarryModelUsesExternal() && CacheUsesBuiltInFallback(g_carry_cache.source_file))
+   {
+      Print(
+         "FXRC startup warning: carry cache is using built-in fallback "
+         + "profiles for part of the universe. Treat this as a safety net, "
+         + "not as a substitute for calendar-backed macro data."
+      );
+   }
+
+   if(ValueModelUsesPPP() && CacheUsesBuiltInFallback(g_ppp_cache.source_file))
+   {
+      Print(
+         "FXRC startup warning: PPP cache is using built-in fallback "
+         + "profiles for part of the universe. Treat this as a safety net, "
+         + "not as a substitute for calendar-backed macro data."
       );
    }
 }
@@ -374,6 +431,7 @@ int FX7HandleInit()
       return INIT_FAILED;
    if(!EnsureStartupPPPCache(total_steps))
       return INIT_FAILED;
+   LogStartupMacroFallbackWarnings();
    if(!SeedStartupSessionState(total_steps))
       return INIT_FAILED;
 
@@ -769,19 +827,21 @@ void TryOpenManagedTarget(const int symbol_idx,
       RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
 }
 
-// Executes the desired trade transition for one symbol.
-void ExecuteSymbolTarget(const int symbol_idx,
-                         const int &target_dir[],
-                         FXRCExecutionSnapshot &cycle_snapshot,
-                         int &active_orders_total,
-                         const bool allow_new_entries)
+// Reconciles current managed state and stages any eligible entry direction.
+void ReconcileManagedTarget(const int symbol_idx,
+                            const int &target_dir[],
+                            int &entry_dir[],
+                            FXRCExecutionSnapshot &cycle_snapshot,
+                            int &active_orders_total)
 {
    string symbol = g_symbols[symbol_idx];
-   bool foreign_active = SymbolHasForeignActiveState(symbol);
    int symbol_account_orders = g_exec_symbol_state[symbol_idx].account_active_orders;
    int cur_dir = g_exec_symbol_state[symbol_idx].dir;
    int cur_count = g_exec_symbol_state[symbol_idx].count;
    bool mixed = g_exec_symbol_state[symbol_idx].mixed;
+   int target = target_dir[symbol_idx];
+
+   entry_dir[symbol_idx] = 0;
 
    if(mixed || cur_count > 1)
    {
@@ -800,9 +860,6 @@ void ExecuteSymbolTarget(const int symbol_idx,
       return;
    }
 
-   bool trade_allowed = IsTradeAllowed(symbol_idx);
-   int target = target_dir[symbol_idx];
-
    if(cur_dir == 1)
    {
       if(target == -1)
@@ -810,15 +867,12 @@ void ExecuteSymbolTarget(const int symbol_idx,
          if(CloseManagedPositionsForSymbol(symbol, "FXRC transition to short"))
          {
             RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-            TryOpenManagedTarget(
-               symbol_idx,
-               -1,
-               cycle_snapshot,
-               active_orders_total,
-               allow_new_entries,
-               trade_allowed,
-               foreign_active
-            );
+            if(g_exec_symbol_state[symbol_idx].count == 0
+               && !g_exec_symbol_state[symbol_idx].mixed
+               && g_exec_symbol_state[symbol_idx].account_active_orders == 0)
+            {
+               entry_dir[symbol_idx] = -1;
+            }
          }
       }
       else if(target == 0 && ShouldExitManagedDirection(symbol_idx, 1))
@@ -836,15 +890,12 @@ void ExecuteSymbolTarget(const int symbol_idx,
          if(CloseManagedPositionsForSymbol(symbol, "FXRC transition to long"))
          {
             RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-            TryOpenManagedTarget(
-               symbol_idx,
-               1,
-               cycle_snapshot,
-               active_orders_total,
-               allow_new_entries,
-               trade_allowed,
-               foreign_active
-            );
+            if(g_exec_symbol_state[symbol_idx].count == 0
+               && !g_exec_symbol_state[symbol_idx].mixed
+               && g_exec_symbol_state[symbol_idx].account_active_orders == 0)
+            {
+               entry_dir[symbol_idx] = 1;
+            }
          }
       }
       else if(target == 0 && ShouldExitManagedDirection(symbol_idx, -1))
@@ -856,7 +907,35 @@ void ExecuteSymbolTarget(const int symbol_idx,
    }
 
    if(cur_count == 0)
+      entry_dir[symbol_idx] = target;
+}
+
+// Executes staged entries in the accepted target-priority order.
+void ExecutePriorityEntries(const int &accepted_order[],
+                            const int &entry_dir[],
+                            FXRCExecutionSnapshot &cycle_snapshot,
+                            int &active_orders_total,
+                            const bool allow_new_entries)
+{
+   for(int i=0; i<ArraySize(accepted_order); ++i)
    {
+      int symbol_idx = accepted_order[i];
+      if(symbol_idx < 0 || symbol_idx >= g_num_symbols)
+         continue;
+
+      int target = entry_dir[symbol_idx];
+      if(target == 0)
+         continue;
+      if(g_exec_symbol_state[symbol_idx].mixed
+         || g_exec_symbol_state[symbol_idx].count != 0
+         || g_exec_symbol_state[symbol_idx].account_active_orders != 0)
+      {
+         continue;
+      }
+
+      string symbol = g_symbols[symbol_idx];
+      bool trade_allowed = IsTradeAllowed(symbol_idx);
+      bool foreign_active = SymbolHasForeignActiveState(symbol);
       TryOpenManagedTarget(
          symbol_idx,
          target,
@@ -896,18 +975,31 @@ void ExecuteModel(const bool allow_new_entries = true)
    ComputeNoveltyOverlay(candidates);
 
    int target_dir[];
-   BuildTradeTargets(candidates, target_dir);
+   int accepted_order[];
+   BuildTradeTargets(candidates, target_dir, accepted_order);
    LogNoTradeTargetDiagnostic(candidates, target_dir);
 
    int active_orders_total = cycle_snapshot.account_active_orders;
+   int entry_dir[];
+   ArrayResize(entry_dir, g_num_symbols);
+   ArrayInitialize(entry_dir, 0);
+
    for(int i=0; i<g_num_symbols; ++i)
-      ExecuteSymbolTarget(
+      ReconcileManagedTarget(
          i,
          target_dir,
+         entry_dir,
          cycle_snapshot,
-         active_orders_total,
-         allow_new_entries
+         active_orders_total
       );
+
+   ExecutePriorityEntries(
+      accepted_order,
+      entry_dir,
+      cycle_snapshot,
+      active_orders_total,
+      allow_new_entries
+   );
 
    ClearSignalBarAdvanceFlags();
 }
