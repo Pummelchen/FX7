@@ -1005,7 +1005,14 @@ bool RefreshRuntimeState(const bool force_log)
    }
 
    FXRCHistoryCheck chart_check;
-   bool chart_ready = InspectSymbolHistory(_Symbol, (ENUM_TIMEFRAMES)_Period, 1, true, chart_check);
+   bool require_live_feed = !MQLInfoInteger(MQL_TESTER);
+   bool chart_ready = InspectSymbolHistory(
+      _Symbol,
+      (ENUM_TIMEFRAMES)_Period,
+      1,
+      require_live_feed,
+      chart_check
+   );
    int ready_symbols = 0;
    int bars_needed = SignalBarsNeeded();
    int value_bars_needed = ValueBarsNeeded();
@@ -1013,7 +1020,13 @@ bool RefreshRuntimeState(const bool force_log)
    for(int i=0; i<g_num_symbols; ++i)
    {
       FXRCHistoryCheck symbol_check;
-      bool signal_ready = InspectSymbolHistory(g_symbols[i], InpSignalTF, bars_needed, MQLInfoInteger(MQL_TESTER), symbol_check);
+      bool signal_ready = InspectSymbolHistory(
+         g_symbols[i],
+         InpSignalTF,
+         bars_needed,
+         require_live_feed,
+         symbol_check
+      );
 
       bool symbol_ready = signal_ready;
       string history_reason = symbol_check.reason;
@@ -1023,7 +1036,13 @@ bool RefreshRuntimeState(const bool force_log)
       if(symbol_ready && ValueSleeveEnabled())
       {
          FXRCHistoryCheck value_check;
-         bool value_ready = InspectSymbolHistory(g_symbols[i], InpValueTF, value_bars_needed, MQLInfoInteger(MQL_TESTER), value_check);
+         bool value_ready = InspectSymbolHistory(
+            g_symbols[i],
+            InpValueTF,
+            value_bars_needed,
+            require_live_feed,
+            value_check
+         );
          if(!value_ready)
          {
             symbol_ready = false;

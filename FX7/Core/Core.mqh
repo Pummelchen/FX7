@@ -1083,12 +1083,26 @@ bool ValidateInputs()
    );
 }
 
+// Returns whether the symbol series is synchronized with the terminal feed.
+bool IsHistorySeriesSynchronized(const string symbol,
+                                 const ENUM_TIMEFRAMES timeframe)
+{
+   if(!SymbolIsSynchronized(symbol))
+      return false;
+
+   long synchronized = 0;
+   if(!SeriesInfoInteger(symbol, timeframe, SERIES_SYNCHRONIZED, synchronized))
+      return false;
+
+   return (synchronized != 0);
+}
+
 // Inspects history readiness for the requested symbol and timeframe.
 bool InspectSymbolHistory(const string symbol,
-                         const ENUM_TIMEFRAMES timeframe,
-                         const int bars_needed,
-                         const bool require_fresh_feed,
-                         FXRCHistoryCheck &check)
+                          const ENUM_TIMEFRAMES timeframe,
+                          const int bars_needed,
+                          const bool require_fresh_feed,
+                          FXRCHistoryCheck &check)
 {
    ResetHistoryCheck(check);
 
@@ -1100,7 +1114,20 @@ bool InspectSymbolHistory(const string symbol,
    }
 
    check.feed_ready = true;
-   if(require_fresh_feed && MQLInfoInteger(MQL_TESTER))
+   if(require_fresh_feed && !MQLInfoInteger(MQL_TESTER))
+   {
+      if(!IsHistorySeriesSynchronized(symbol, timeframe))
+      {
+         check.feed_ready = false;
+         check.reason = StringFormat(
+            "History is not synchronized yet for %s on %s.",
+            symbol,
+            EnumToString(timeframe)
+         );
+         return false;
+      }
+   }
+   else if(require_fresh_feed && MQLInfoInteger(MQL_TESTER))
    {
       // In the Strategy Tester, startup preflight can run before the first simulated
       // tick advances the visible series. Existing history is sufficient here; the
@@ -1377,9 +1404,15 @@ double NormalizeVolume(const string symbol, const double requested)
       step = minv;
    if(step <= 0.0)
       step = 0.01;
+   if(requested <= 0.0 || maxv <= 0.0)
+      return 0.0;
 
-   double v = MathRound(requested / step) * step;
-   v = MathMax(minv, MathMin(maxv, v));
+   double capped = MathMin(requested, maxv);
+   double steps = MathFloor((capped / step) + 1e-6);
+   double v = steps * step;
+   if(v + EPS() < minv)
+      return 0.0;
+
    return NormalizeDouble(v, VolumeDigits(step));
 }
 

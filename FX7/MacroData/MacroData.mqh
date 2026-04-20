@@ -1311,14 +1311,12 @@ bool NormalizeCarryRateValue(const double raw_value, double &normalized_rate)
    if(abs_value <= EPS())
       return true;
 
-   if(abs_value <= 1.0)
-   {
-      normalized_rate = raw_value;
-      return true;
-   }
-
    if(abs_value <= 100.0)
    {
+      // Calendar carry events are filtered to percent units, so convert the
+      // published percentage-point value into the annual fraction used by the
+      // strategy. This keeps low-rate currencies such as JPY or CHF in the
+      // correct scale instead of treating 0.25 as 25%.
       normalized_rate = raw_value / 100.0;
       return true;
    }
