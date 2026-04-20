@@ -1008,7 +1008,14 @@ bool AppendPPPSeriesFromInflationRates(const string currency,
       while(cursor < target)
       {
          cursor = AddMonthsToDate(cursor, 1);
-         index_value *= AnnualRateToMonthlyFactor(active_annual_rate);
+         // Apply the newly observed month's inflation rate to that month instead of
+         // lagging the update by one full step, which would shift the rebuilt CPI
+         // path away from the explicit level history the old CSVs represented.
+         double step_annual_rate = active_annual_rate;
+         if(cursor >= target)
+            step_annual_rate = annual_rates[i];
+
+         index_value *= AnnualRateToMonthlyFactor(step_annual_rate);
          AppendMacroRecord(temp_ccy, temp_dates, temp_cpi, currency, cursor, index_value);
       }
       active_annual_rate = annual_rates[i];
