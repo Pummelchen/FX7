@@ -1,13 +1,302 @@
-// Runs the modular EA initialization flow.
-int FX7HandleInit()
+// Resets runtime, dependency, and cache state before startup.
+void ResetStartupState()
 {
-   const int total_steps = 12;
    ResetRuntimeState(g_runtime_state);
    ResetDependencyRuntimeState(g_dependency_state);
    g_hard_stop_active = false;
    g_hard_stop_reason = "";
    ResetCarryCacheState(g_carry_cache);
    ResetPPPCacheState(g_ppp_cache);
+}
+
+// Returns the number of symbols currently allowed to trade.
+int CountTradableSymbols()
+{
+   int tradable_count = 0;
+   for(int i=0; i<g_num_symbols; ++i)
+   {
+      if(IsTradeAllowed(i))
+         tradable_count++;
+   }
+   return tradable_count;
+}
+
+// Logs startup warnings for the configured macro sleeves and dependency policy.
+void LogStartupConfigurationWarnings()
+{
+   if(CarrySleeveEnabled()
+      && (InpCarryModel != FXRC_CARRY_MODEL_RATE_DIFF
+          || InpCarryAllowBrokerFallback))
+   {
+      PrintFormat(
+         "FXRC startup warning: carry model is %s with broker fallback=%s. "
+         + "Pure external carry is not enforced.",
+         EnumToString(InpCarryModel),
+         (InpCarryAllowBrokerFallback ? "true" : "false")
+      );
+   }
+
+   if(ValueSleeveEnabled()
+      && (InpValueModel != FXRC_VALUE_MODEL_PPP
+          || InpPPPAllowProxyFallback))
+   {
+      PrintFormat(
+         "FXRC startup warning: value model is %s with PPP proxy fallback=%s. "
+         + "Pure PPP value is not enforced, the proxy leg is only a "
+         + "statistical anchor, and value is treated as a slow "
+         + "reliability-scaled bias rather than a primary intraday alpha.",
+         EnumToString(InpValueModel),
+         (InpPPPAllowProxyFallback ? "true" : "false")
+      );
+   }
+
+   if(DependenciesRequiredAtRuntime()
+      && !InpFreezeEntriesOnDependencyFailure)
+   {
+      Print(
+         "FXRC startup warning: degraded dependency mode will keep entries "
+         + "enabled and continue on stale carry/PPP inputs until grace expiry."
+      );
+   }
+}
+
+// Ensures the startup-built carry cache is available when required.
+bool EnsureStartupCarryCache(const int total_steps)
+{
+   const int step = 8;
+   const string label = "Build carry macro cache";
+   if(!CarryModelUsesExternal())
+   {
+      LogStartupStep(
+         step,
+         total_steps,
+         label,
+         "Skipped",
+         "broker-swap carry model"
+      );
+      return true;
+   }
+
+   bool carry_ok = EnsureCarryDataCache(true);
+   string carry_detail = (
+      carry_ok
+      ? StringFormat(
+           "%d rows via %s",
+           g_carry_cache.record_count,
+           g_carry_cache.source_file
+        )
+      : g_carry_cache.reason
+   );
+   string carry_status = (carry_ok ? "Done" : "Failed");
+
+   if(CarrySignalRequiresExternalData())
+   {
+      if(!carry_ok)
+      {
+         LogStartupStep(step, total_steps, label, "Failed", carry_detail);
+         PrintFormat(
+            "Required startup-built carry data is unavailable. %s",
+            carry_detail
+         );
+         return false;
+      }
+
+      string coverage_reason;
+      if(!ValidateRequiredCarryCoverage(coverage_reason))
+      {
+         LogStartupStep(step, total_steps, label, "Failed", coverage_reason);
+         PrintFormat(
+            "Required startup-built carry data coverage failed: %s",
+            coverage_reason
+         );
+         return false;
+      }
+   }
+
+   LogStartupStep(step, total_steps, label, carry_status, carry_detail);
+   return true;
+}
+
+// Ensures the startup-built PPP cache is available when required.
+bool EnsureStartupPPPCache(const int total_steps)
+{
+   const int step = 9;
+   const string label = "Build PPP macro cache";
+   if(!ValueModelUsesPPP())
+   {
+      LogStartupStep(
+         step,
+         total_steps,
+         label,
+         "Skipped",
+         "statistical-anchor proxy value model"
+      );
+      return true;
+   }
+
+   bool ppp_ok = EnsurePPPDataCache(true);
+   string ppp_detail = (
+      ppp_ok
+      ? StringFormat(
+           "%d rows via %s",
+           g_ppp_cache.record_count,
+           g_ppp_cache.source_file
+        )
+      : g_ppp_cache.reason
+   );
+   string ppp_status = (ppp_ok ? "Done" : "Failed");
+
+   if(ValueSignalRequiresPPPData())
+   {
+      if(!ppp_ok)
+      {
+         LogStartupStep(step, total_steps, label, "Failed", ppp_detail);
+         PrintFormat(
+            "Required startup-built PPP data is unavailable. %s",
+            ppp_detail
+         );
+         return false;
+      }
+
+      string coverage_reason;
+      if(!ValidateRequiredPPPCoverage(coverage_reason))
+      {
+         LogStartupStep(step, total_steps, label, "Failed", coverage_reason);
+         PrintFormat(
+            "Required startup-built PPP data coverage failed: %s",
+            coverage_reason
+         );
+         return false;
+      }
+   }
+
+   LogStartupStep(step, total_steps, label, ppp_status, ppp_detail);
+   return true;
+}
+
+// Seeds startup session state after input validation and cache initialization.
+bool SeedStartupSessionState(const int total_steps)
+{
+   const int step = 10;
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   ClearConversionFailureState();
+   if(!TryConvertCash(
+      AccountInfoString(ACCOUNT_CURRENCY),
+      "USD",
+      equity,
+      g_session_start_equity_usd))
+   {
+      LogStartupStep(
+         step,
+         total_steps,
+         "Seed session state",
+         "Failed",
+         g_conversion_error_reason
+      );
+      PrintFormat(
+         "Unable to seed session baseline: %s",
+         g_conversion_error_reason
+      );
+      return false;
+   }
+
+   g_equi_max = equity;
+   g_backtest_start_time = 0;
+   g_tester_diag_logs = 0;
+   ArrayResize(g_trail_tickets, 0);
+   ArrayResize(g_trail_peak_profit_usd, 0);
+   ArrayResize(g_recent_entry_times, 0);
+   ArrayResize(g_pending_state_verifications, 0);
+   g_execution_state_dirty = true;
+
+   LogStartupStep(
+      step,
+      total_steps,
+      "Seed session state",
+      "Done",
+      StringFormat("equity=%.2f", equity)
+   );
+   return true;
+}
+
+// Logs the startup runtime summary after preflight succeeds.
+void LogStartupRuntimeSummary()
+{
+   int tradable_count = CountTradableSymbols();
+   if(g_num_symbols == 1)
+   {
+      PrintFormat(
+         "FXRC startup warning: only one analysis symbol is available (%s). "
+         + "Cross-symbol ranking will be effectively disabled.",
+         g_symbols[0]
+      );
+   }
+
+   PrintFormat(
+      "FXRC initialized with %d analysis symbols and %d tradable symbols on "
+      + "%s. trade_model=%s Reference EUR notional=%.2f Session baseline="
+      + "%.2f USD runtime=%s ready_symbols=%d",
+      g_num_symbols,
+      tradable_count,
+      EnumToString(InpSignalTF),
+      EnumToString(Trade_Model),
+      g_reference_eur_notional,
+      g_session_start_equity_usd,
+      RuntimeStatusToString(g_runtime_state.status),
+      g_runtime_state.ready_symbols
+   );
+
+   if(IsModernTradeModel())
+   {
+      Print(
+         "FXRC modern trade model active: exits are signal-driven and "
+         + "classic overlays (fixed TP, trailing, session reset) are disabled."
+      );
+   }
+   else if(InpClassicUseTrailingStop == 1)
+   {
+      Print(
+         "FXRC classic trade model active with trailing stop enabled: "
+         + "trailing activation uses "
+         + "InpClassicSinglePositionTakeProfitUSD as the profit anchor and "
+         + "the fixed hard TP is disabled."
+      );
+   }
+}
+
+// Activates the execution timer once startup is complete.
+bool ActivateExecutionTimer(const int total_steps)
+{
+   const int step = 12;
+   ResetLastError();
+   if(!EventSetTimer(1))
+   {
+      LogStartupStep(
+         step,
+         total_steps,
+         "Activate execution timer",
+         "Failed",
+         IntegerToString(GetLastError())
+      );
+      Print("Failed to activate the execution-state timer.");
+      return false;
+   }
+
+   LogStartupStep(
+      step,
+      total_steps,
+      "Activate execution timer",
+      "Done",
+      "1 second"
+   );
+   return true;
+}
+
+// Runs the modular EA initialization flow.
+int FX7HandleInit()
+{
+   const int total_steps = 12;
+   ResetStartupState();
    LogStartupStep(1, total_steps, "Reset runtime state", "Done");
 
    if(!ValidateInputs())
@@ -20,7 +309,11 @@ int FX7HandleInit()
    if(!IsForexPairSymbol(_Symbol))
    {
       LogStartupStep(3, total_steps, "Validate chart symbol", "Failed", _Symbol);
-      PrintFormat("FXRC only supports FX symbols. Current chart/test symbol %s is not forex.", _Symbol);
+      PrintFormat(
+         "FXRC only supports FX symbols. Current chart/test symbol %s is "
+         + "not forex.",
+         _Symbol
+      );
       return INIT_FAILED;
    }
    LogStartupStep(3, total_steps, "Validate chart symbol", "Done", _Symbol);
@@ -31,7 +324,13 @@ int FX7HandleInit()
       Print("Failed to parse at least one valid symbol.");
       return INIT_FAILED;
    }
-   LogStartupStep(4, total_steps, "Parse analysis universe", "Done", StringFormat("%d symbols", g_num_symbols));
+   LogStartupStep(
+      4,
+      total_steps,
+      "Parse analysis universe",
+      "Done",
+      StringFormat("%d symbols", g_num_symbols)
+   );
 
    if(!InitArrays())
    {
@@ -39,7 +338,13 @@ int FX7HandleInit()
       Print("Failed to initialize arrays.");
       return INIT_FAILED;
    }
-   LogStartupStep(5, total_steps, "Initialize arrays", "Done", StringFormat("ret_hist_len=%d", g_ret_hist_len));
+   LogStartupStep(
+      5,
+      total_steps,
+      "Initialize arrays",
+      "Done",
+      StringFormat("ret_hist_len=%d", g_ret_hist_len)
+   );
 
    if(!InitTradableSymbols())
    {
@@ -55,142 +360,40 @@ int FX7HandleInit()
       Print("Failed to compute EUR reference notional.");
       return INIT_FAILED;
    }
-   LogStartupStep(7, total_steps, "Build EUR reference notional", "Done", DoubleToString(g_reference_eur_notional, 2));
+   LogStartupStep(
+      7,
+      total_steps,
+      "Build EUR reference notional",
+      "Done",
+      DoubleToString(g_reference_eur_notional, 2)
+   );
 
-   if(CarrySleeveEnabled() && (InpCarryModel != FXRC_CARRY_MODEL_RATE_DIFF || InpCarryAllowBrokerFallback))
-   {
-      PrintFormat("FXRC startup warning: carry model is %s with broker fallback=%s. Pure external carry is not enforced.",
-                  EnumToString(InpCarryModel),
-                  (InpCarryAllowBrokerFallback ? "true" : "false"));
-   }
-   if(ValueSleeveEnabled() && (InpValueModel != FXRC_VALUE_MODEL_PPP || InpPPPAllowProxyFallback))
-   {
-      PrintFormat("FXRC startup warning: value model is %s with PPP proxy fallback=%s. Pure PPP value is not enforced, the proxy leg is only a statistical anchor, and value is treated as a slow reliability-scaled bias rather than a primary intraday alpha.",
-                  EnumToString(InpValueModel),
-                  (InpPPPAllowProxyFallback ? "true" : "false"));
-   }
-   if(DependenciesRequiredAtRuntime() && !InpFreezeEntriesOnDependencyFailure)
-      Print("FXRC startup warning: degraded dependency mode will keep entries enabled and continue on stale carry/PPP inputs until grace expiry.");
+   LogStartupConfigurationWarnings();
 
-   if(CarryModelUsesExternal())
-   {
-      bool carry_ok = EnsureCarryDataCache(true);
-      string carry_detail = (carry_ok
-                             ? StringFormat("%d rows via %s", g_carry_cache.record_count, g_carry_cache.source_file)
-                             : g_carry_cache.reason);
-      string carry_status = (carry_ok ? "Done" : "Failed");
-
-      if(CarrySignalRequiresExternalData())
-      {
-         if(!carry_ok)
-         {
-            LogStartupStep(8, total_steps, "Build carry macro cache", "Failed", carry_detail);
-            PrintFormat("Required startup-built carry data is unavailable. %s", carry_detail);
-            return INIT_FAILED;
-         }
-
-         string coverage_reason;
-         if(!ValidateRequiredCarryCoverage(coverage_reason))
-         {
-            LogStartupStep(8, total_steps, "Build carry macro cache", "Failed", coverage_reason);
-            PrintFormat("Required startup-built carry data coverage failed: %s", coverage_reason);
-            return INIT_FAILED;
-         }
-      }
-
-      LogStartupStep(8, total_steps, "Build carry macro cache", carry_status, carry_detail);
-   }
-   else
-   {
-      LogStartupStep(8, total_steps, "Build carry macro cache", "Skipped", "broker-swap carry model");
-   }
-
-   if(ValueModelUsesPPP())
-   {
-      bool ppp_ok = EnsurePPPDataCache(true);
-      string ppp_detail = (ppp_ok
-                           ? StringFormat("%d rows via %s", g_ppp_cache.record_count, g_ppp_cache.source_file)
-                           : g_ppp_cache.reason);
-      string ppp_status = (ppp_ok ? "Done" : "Failed");
-
-      if(ValueSignalRequiresPPPData())
-      {
-         if(!ppp_ok)
-         {
-            LogStartupStep(9, total_steps, "Build PPP macro cache", "Failed", ppp_detail);
-            PrintFormat("Required startup-built PPP data is unavailable. %s", ppp_detail);
-            return INIT_FAILED;
-         }
-
-         string coverage_reason;
-         if(!ValidateRequiredPPPCoverage(coverage_reason))
-         {
-            LogStartupStep(9, total_steps, "Build PPP macro cache", "Failed", coverage_reason);
-            PrintFormat("Required startup-built PPP data coverage failed: %s", coverage_reason);
-            return INIT_FAILED;
-         }
-      }
-
-      LogStartupStep(9, total_steps, "Build PPP macro cache", ppp_status, ppp_detail);
-   }
-   else
-   {
-      LogStartupStep(9, total_steps, "Build PPP macro cache", "Skipped", "statistical-anchor proxy value model");
-   }
-
-   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
-   ClearConversionFailureState();
-   if(!TryConvertCash(AccountInfoString(ACCOUNT_CURRENCY), "USD", equity, g_session_start_equity_usd))
-   {
-      LogStartupStep(10, total_steps, "Seed session state", "Failed", g_conversion_error_reason);
-      PrintFormat("Unable to seed session baseline: %s", g_conversion_error_reason);
+   if(!EnsureStartupCarryCache(total_steps))
       return INIT_FAILED;
-   }
-   g_equi_max = equity;
-   g_backtest_start_time = 0;
-   g_tester_diag_logs = 0;
-   ArrayResize(g_trail_tickets, 0);
-   ArrayResize(g_trail_peak_profit_usd, 0);
-   ArrayResize(g_recent_entry_times, 0);
-   ArrayResize(g_pending_state_verifications, 0);
-   g_execution_state_dirty = true;
-   LogStartupStep(10, total_steps, "Seed session state", "Done", StringFormat("equity=%.2f", equity));
+   if(!EnsureStartupPPPCache(total_steps))
+      return INIT_FAILED;
+   if(!SeedStartupSessionState(total_steps))
+      return INIT_FAILED;
 
    RefreshRuntimeState(true);
-   LogStartupStep(11, total_steps, "Refresh runtime state", "Done",
-                  StringFormat("status=%s ready=%d", RuntimeStatusToString(g_runtime_state.status), g_runtime_state.ready_symbols));
+   LogStartupStep(
+      11,
+      total_steps,
+      "Refresh runtime state",
+      "Done",
+      StringFormat(
+         "status=%s ready=%d",
+         RuntimeStatusToString(g_runtime_state.status),
+         g_runtime_state.ready_symbols
+      )
+   );
 
-   int tradable_count = 0;
-   for(int i=0; i<g_num_symbols; ++i)
-   {
-      if(IsTradeAllowed(i))
-         tradable_count++;
-   }
-
-   if(g_num_symbols == 1)
-      PrintFormat("FXRC startup warning: only one analysis symbol is available (%s). Cross-symbol ranking will be effectively disabled.", g_symbols[0]);
-
-   PrintFormat("FXRC initialized with %d analysis symbols and %d tradable symbols on %s. trade_model=%s Reference EUR notional=%.2f Session baseline=%.2f USD runtime=%s ready_symbols=%d",
-               g_num_symbols,
-               tradable_count,
-               EnumToString(InpSignalTF),
-               EnumToString(Trade_Model),
-               g_reference_eur_notional,
-               g_session_start_equity_usd,
-               RuntimeStatusToString(g_runtime_state.status),
-               g_runtime_state.ready_symbols);
-   if(IsModernTradeModel())
-      Print("FXRC modern trade model active: exits are signal-driven and classic overlays (fixed TP, trailing, session reset) are disabled.");
-   else if(InpClassicUseTrailingStop == 1)
-      Print("FXRC classic trade model active with trailing stop enabled: trailing activation uses InpClassicSinglePositionTakeProfitUSD as the profit anchor and the fixed hard TP is disabled.");
-   ResetLastError();
-   if(!EventSetTimer(1))
-   {
-      LogStartupStep(12, total_steps, "Activate execution timer", "Failed", IntegerToString(GetLastError()));
-      Print("Failed to activate the execution-state timer.");
+   LogStartupRuntimeSummary();
+   if(!ActivateExecutionTimer(total_steps))
       return INIT_FAILED;
-   }
-   LogStartupStep(12, total_steps, "Activate execution timer", "Done", "1 second");
+
    return INIT_SUCCEEDED;
 }
 
@@ -324,12 +527,9 @@ void FX7HandleTradeTransaction(const MqlTradeTransaction& trans,
 }
 
 //------------------------- Runtime Flow -------------------------//
-// Executes model.
-void ExecuteModel(const bool allow_new_entries = true)
+// Refreshes the per-symbol feature state for the current model cycle.
+bool RefreshCycleFeatures(const bool allow_stale_dependency_values)
 {
-   bool allow_stale_dependency_values = (g_dependency_state.status == FXRC_DEPENDENCY_DEGRADED
-                                      && (!allow_new_entries || !InpFreezeEntriesOnDependencyFailure));
-
    bool any_ok = false;
    int feature_failure_grace = MathMax(0, InpSymbolDataFailureGraceBars);
    for(int i=0; i<g_num_symbols; ++i)
@@ -346,8 +546,15 @@ void ExecuteModel(const bool allow_new_entries = true)
             MarkSymbolDataStale(i);
             any_ok = true;
             if(!MQLInfoInteger(MQL_TESTER) || g_tester_diag_logs < 20)
-               PrintFormat("Feature refresh failed on %s. Freezing new entries and keeping prior state (%d/%d grace bars).",
-                           g_symbols[i], g_symbol_feature_failures[i], feature_failure_grace);
+            {
+               PrintFormat(
+                  "Feature refresh failed on %s. Freezing new entries and "
+                  + "keeping prior state (%d/%d grace bars).",
+                  g_symbols[i],
+                  g_symbol_feature_failures[i],
+                  feature_failure_grace
+               );
+            }
             if(MQLInfoInteger(MQL_TESTER))
                g_tester_diag_logs++;
          }
@@ -358,25 +565,42 @@ void ExecuteModel(const bool allow_new_entries = true)
       }
    }
 
-   if(!any_ok && MQLInfoInteger(MQL_TESTER) && g_tester_diag_logs < 5)
+   return any_ok;
+}
+
+// Returns the ready symbol with the strongest absolute composite score.
+int FindBestReadySymbol()
+{
+   int best_idx = -1;
+   double best_abs_s = -1.0;
+   for(int i=0; i<g_num_symbols; ++i)
    {
-      Print("FXRC tester diag: no symbols produced valid features on this cycle.");
-      g_tester_diag_logs++;
+      if(!g_symbol_data_ok[i])
+         continue;
+
+      double abs_s = MathAbs(g_S[i]);
+      if(abs_s > best_abs_s)
+      {
+         best_abs_s = abs_s;
+         best_idx = i;
+      }
    }
+   return best_idx;
+}
 
-   if(g_conversion_error_active)
+// Logs tester diagnostics when no symbols produced usable features.
+void LogNoFeatureDiagnostic(const bool any_ok)
+{
+   if(any_ok || !MQLInfoInteger(MQL_TESTER) || g_tester_diag_logs >= 5)
       return;
 
-   if(!any_ok)
-      return;
+   Print("FXRC tester diag: no symbols produced valid features on this cycle.");
+   g_tester_diag_logs++;
+}
 
-   UpdatePanicGateAndScores();
-   BuildCorrelationMatrices();
-   EnsureProtectiveStops();
-   FXRCExecutionSnapshot cycle_snapshot;
-   RefreshExecutionSnapshot(cycle_snapshot);
-
-   int candidates[];
+// Collects symbols that satisfy the minimum entry gates for this cycle.
+void CollectTradeCandidates(int &candidates[])
+{
    ArrayResize(candidates, 0);
    for(int i=0; i<g_num_symbols; ++i)
    {
@@ -390,176 +614,300 @@ void ExecuteModel(const bool allow_new_entries = true)
          candidates[new_size - 1] = i;
       }
    }
+}
 
-   if(ArraySize(candidates) == 0 && MQLInfoInteger(MQL_TESTER) && g_tester_diag_logs < 5)
+// Logs tester diagnostics when no candidates survive the cycle filters.
+void LogNoCandidateDiagnostic(const int &candidates[])
+{
+   if(ArraySize(candidates) != 0
+      || !MQLInfoInteger(MQL_TESTER)
+      || g_tester_diag_logs >= 5)
    {
-      int best_idx = -1;
-      double best_abs_s = -1.0;
-      for(int i=0; i<g_num_symbols; ++i)
+      return;
+   }
+
+   int best_idx = FindBestReadySymbol();
+   if(best_idx >= 0)
+   {
+      PrintFormat(
+         "FXRC tester diag: no candidates. best=%s S=%.4f theta_in=%.4f "
+         + "conf=%.4f G=%.4f Q=%.4f/%.4f M=%.4f C=%.4f V=%.4f VA=%.4f "
+         + "VPPP=%.4f WPPP=%.2f VR=%.2f BK=%.4f",
+         g_symbols[best_idx],
+         g_S[best_idx],
+         g_theta_in_eff[best_idx],
+         g_Conf[best_idx],
+         g_G[best_idx],
+         g_Q_long[best_idx],
+         g_Q_short[best_idx],
+         g_M[best_idx],
+         g_Carry[best_idx],
+         g_Value[best_idx],
+         g_ValueProxy[best_idx],
+         g_ValuePPP[best_idx],
+         g_ValuePPPWeight[best_idx],
+         g_ValueReliability[best_idx],
+         g_BK[best_idx]
+      );
+   }
+   else
+   {
+      Print("FXRC tester diag: no candidates and no symbols have valid data.");
+   }
+   g_tester_diag_logs++;
+}
+
+// Logs tester diagnostics when candidates exist but none become trade targets.
+void LogNoTradeTargetDiagnostic(const int &candidates[], const int &target_dir[])
+{
+   if(!MQLInfoInteger(MQL_TESTER) || g_tester_diag_logs >= 5)
+      return;
+
+   int target_count = 0;
+   int best_idx = -1;
+   double best_priority = -1.0;
+
+   for(int c=0; c<ArraySize(candidates); ++c)
+   {
+      int i = candidates[c];
+      if(target_dir[i] != 0)
+         target_count++;
+
+      double priority = BuildCandidatePriority(i, g_entry_dir_raw[i]);
+      if(priority > best_priority)
       {
-         if(!g_symbol_data_ok[i])
-            continue;
-         if(MathAbs(g_S[i]) > best_abs_s)
+         best_priority = priority;
+         best_idx = i;
+      }
+   }
+
+   if(target_count != 0 || best_idx < 0)
+      return;
+
+   PrintFormat(
+      "FXRC tester diag: candidates built but no trade targets. best=%s "
+      + "dir=%d priority=%.4f S=%.4f conf=%.4f G=%.4f Q=%.4f/%.4f "
+      + "rank=%.4f M=%.4f C=%.4f VA=%.4f VPPP=%.4f WPPP=%.2f VR=%.2f",
+      g_symbols[best_idx],
+      g_entry_dir_raw[best_idx],
+      best_priority,
+      g_S[best_idx],
+      g_Conf[best_idx],
+      g_G[best_idx],
+      g_Q_long[best_idx],
+      g_Q_short[best_idx],
+      g_Rank[best_idx],
+      g_M[best_idx],
+      g_Carry[best_idx],
+      g_Value[best_idx],
+      g_ValueProxy[best_idx],
+      g_ValuePPP[best_idx],
+      g_ValuePPPWeight[best_idx],
+      g_ValueReliability[best_idx]
+   );
+   g_tester_diag_logs++;
+}
+
+// Returns whether a target direction may open on the current cycle.
+bool CanOpenManagedTarget(const string symbol,
+                          const int target_dir,
+                          const bool allow_new_entries,
+                          const bool trade_allowed,
+                          const bool foreign_active,
+                          const int active_orders_total)
+{
+   if(target_dir == 0 || !allow_new_entries || !trade_allowed)
+      return false;
+
+   if(foreign_active)
+   {
+      PrintFormat(
+         "Skipping %s because a non-FXRC active order/position already "
+         + "exists on the symbol.",
+         symbol
+      );
+      return false;
+   }
+
+   if(active_orders_total >= InpMaxAccountOrders)
+   {
+      PrintFormat(
+         "Skipping %s %s entry because account active order cap %d is "
+         + "reached.",
+         symbol,
+         (target_dir > 0 ? "long" : "short"),
+         InpMaxAccountOrders
+      );
+      return false;
+   }
+
+   return true;
+}
+
+// Attempts to open the requested managed target direction.
+void TryOpenManagedTarget(const int symbol_idx,
+                          const int target_dir,
+                          FXRCExecutionSnapshot &cycle_snapshot,
+                          int &active_orders_total,
+                          const bool allow_new_entries,
+                          const bool trade_allowed,
+                          const bool foreign_active)
+{
+   string symbol = g_symbols[symbol_idx];
+   if(!CanOpenManagedTarget(
+      symbol,
+      target_dir,
+      allow_new_entries,
+      trade_allowed,
+      foreign_active,
+      active_orders_total))
+   {
+      return;
+   }
+
+   if(OpenManagedPosition(symbol_idx, target_dir, cycle_snapshot))
+      RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
+}
+
+// Executes the desired trade transition for one symbol.
+void ExecuteSymbolTarget(const int symbol_idx,
+                         const int &target_dir[],
+                         FXRCExecutionSnapshot &cycle_snapshot,
+                         int &active_orders_total,
+                         const bool allow_new_entries)
+{
+   string symbol = g_symbols[symbol_idx];
+   bool foreign_active = SymbolHasForeignActiveState(symbol);
+   int symbol_account_orders = g_exec_symbol_state[symbol_idx].account_active_orders;
+   int cur_dir = g_exec_symbol_state[symbol_idx].dir;
+   int cur_count = g_exec_symbol_state[symbol_idx].count;
+   bool mixed = g_exec_symbol_state[symbol_idx].mixed;
+
+   if(mixed || cur_count > 1)
+   {
+      if(CloseManagedPositionsForSymbol(symbol, "FXRC normalize managed state"))
+         RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
+      return;
+   }
+
+   if(symbol_account_orders > cur_count)
+   {
+      PrintFormat(
+         "Skipping %s because another active account order/position already "
+         + "exists on the symbol.",
+         symbol
+      );
+      return;
+   }
+
+   bool trade_allowed = IsTradeAllowed(symbol_idx);
+   int target = target_dir[symbol_idx];
+
+   if(cur_dir == 1)
+   {
+      if(target == -1)
+      {
+         if(CloseManagedPositionsForSymbol(symbol, "FXRC transition to short"))
          {
-            best_abs_s = MathAbs(g_S[i]);
-            best_idx = i;
+            RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
+            TryOpenManagedTarget(
+               symbol_idx,
+               -1,
+               cycle_snapshot,
+               active_orders_total,
+               allow_new_entries,
+               trade_allowed,
+               foreign_active
+            );
          }
       }
-
-      if(best_idx >= 0)
+      else if(target == 0 && ShouldExitManagedDirection(symbol_idx, 1))
       {
-         PrintFormat("FXRC tester diag: no candidates. best=%s S=%.4f theta_in=%.4f conf=%.4f G=%.4f Q=%.4f/%.4f M=%.4f C=%.4f V=%.4f VA=%.4f VPPP=%.4f WPPP=%.2f VR=%.2f BK=%.4f",
-                     g_symbols[best_idx], g_S[best_idx], g_theta_in_eff[best_idx], g_Conf[best_idx],
-                     g_G[best_idx], g_Q_long[best_idx], g_Q_short[best_idx], g_M[best_idx], g_Carry[best_idx], g_Value[best_idx],
-                     g_ValueProxy[best_idx], g_ValuePPP[best_idx], g_ValuePPPWeight[best_idx], g_ValueReliability[best_idx], g_BK[best_idx]);
+         if(CloseManagedPositionsForSymbol(symbol, "FXRC exit long"))
+            RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
       }
-      else
-      {
-         Print("FXRC tester diag: no candidates and no symbols have valid data.");
-      }
-      g_tester_diag_logs++;
+      return;
    }
+
+   if(cur_dir == -1)
+   {
+      if(target == 1)
+      {
+         if(CloseManagedPositionsForSymbol(symbol, "FXRC transition to long"))
+         {
+            RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
+            TryOpenManagedTarget(
+               symbol_idx,
+               1,
+               cycle_snapshot,
+               active_orders_total,
+               allow_new_entries,
+               trade_allowed,
+               foreign_active
+            );
+         }
+      }
+      else if(target == 0 && ShouldExitManagedDirection(symbol_idx, -1))
+      {
+         if(CloseManagedPositionsForSymbol(symbol, "FXRC exit short"))
+            RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
+      }
+      return;
+   }
+
+   if(cur_count == 0)
+   {
+      TryOpenManagedTarget(
+         symbol_idx,
+         target,
+         cycle_snapshot,
+         active_orders_total,
+         allow_new_entries,
+         trade_allowed,
+         foreign_active
+      );
+   }
+}
+
+// Executes model.
+void ExecuteModel(const bool allow_new_entries = true)
+{
+   bool allow_stale_dependency_values = (
+      g_dependency_state.status == FXRC_DEPENDENCY_DEGRADED
+      && (!allow_new_entries || !InpFreezeEntriesOnDependencyFailure)
+   );
+
+   bool any_ok = RefreshCycleFeatures(allow_stale_dependency_values);
+   LogNoFeatureDiagnostic(any_ok);
+
+   if(g_conversion_error_active || !any_ok)
+      return;
+
+   UpdatePanicGateAndScores();
+   BuildCorrelationMatrices();
+   EnsureProtectiveStops();
+   FXRCExecutionSnapshot cycle_snapshot;
+   RefreshExecutionSnapshot(cycle_snapshot);
+
+   int candidates[];
+   CollectTradeCandidates(candidates);
+   LogNoCandidateDiagnostic(candidates);
 
    ComputeNoveltyOverlay(candidates);
 
    int target_dir[];
    BuildTradeTargets(candidates, target_dir);
-
-   if(MQLInfoInteger(MQL_TESTER) && g_tester_diag_logs < 5)
-   {
-      int target_count = 0;
-      int best_idx = -1;
-      double best_priority = -1.0;
-
-      for(int c=0; c<ArraySize(candidates); ++c)
-      {
-         int i = candidates[c];
-         if(target_dir[i] != 0)
-            target_count++;
-
-         double priority = BuildCandidatePriority(i, g_entry_dir_raw[i]);
-         if(priority > best_priority)
-         {
-            best_priority = priority;
-            best_idx = i;
-         }
-      }
-
-      if(target_count == 0 && best_idx >= 0)
-      {
-         PrintFormat("FXRC tester diag: candidates built but no trade targets. best=%s dir=%d priority=%.4f S=%.4f conf=%.4f G=%.4f Q=%.4f/%.4f rank=%.4f M=%.4f C=%.4f VA=%.4f VPPP=%.4f WPPP=%.2f VR=%.2f",
-                     g_symbols[best_idx], g_entry_dir_raw[best_idx], best_priority, g_S[best_idx], g_Conf[best_idx],
-                     g_G[best_idx], g_Q_long[best_idx], g_Q_short[best_idx], g_Rank[best_idx], g_M[best_idx], g_Carry[best_idx], g_Value[best_idx],
-                     g_ValueProxy[best_idx], g_ValuePPP[best_idx], g_ValuePPPWeight[best_idx], g_ValueReliability[best_idx]);
-         g_tester_diag_logs++;
-      }
-   }
+   LogNoTradeTargetDiagnostic(candidates, target_dir);
 
    int active_orders_total = cycle_snapshot.account_active_orders;
-
    for(int i=0; i<g_num_symbols; ++i)
-   {
-      string sym = g_symbols[i];
-      bool foreign_active = SymbolHasForeignActiveState(sym);
-
-      int symbol_account_orders = g_exec_symbol_state[i].account_active_orders;
-      int cur_dir = g_exec_symbol_state[i].dir;
-      int cur_count = g_exec_symbol_state[i].count;
-      bool mixed = g_exec_symbol_state[i].mixed;
-
-      if(mixed || cur_count > 1)
-      {
-         if(CloseManagedPositionsForSymbol(sym, "FXRC normalize managed state"))
-            RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-         continue;
-      }
-
-      if(symbol_account_orders > cur_count)
-      {
-         PrintFormat("Skipping %s because another active account order/position already exists on the symbol.", sym);
-         continue;
-      }
-
-      bool trade_allowed = IsTradeAllowed(i);
-
-      int target = target_dir[i];
-
-      if(cur_dir == 1)
-      {
-         if(target == -1)
-         {
-            if(CloseManagedPositionsForSymbol(sym, "FXRC transition to short"))
-            {
-               RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-               if(allow_new_entries && trade_allowed && !foreign_active)
-               {
-                  if(OpenManagedPosition(i, -1, cycle_snapshot))
-                     RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-               }
-            }
-         }
-         else if(target == 0 && ShouldExitManagedDirection(i, 1))
-         {
-            if(CloseManagedPositionsForSymbol(sym, "FXRC exit long"))
-               RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-         }
-      }
-      else if(cur_dir == -1)
-      {
-         if(target == 1)
-         {
-            if(CloseManagedPositionsForSymbol(sym, "FXRC transition to long"))
-            {
-               RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-               if(allow_new_entries && trade_allowed && !foreign_active)
-               {
-                  if(OpenManagedPosition(i, 1, cycle_snapshot))
-                     RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-               }
-            }
-         }
-         else if(target == 0 && ShouldExitManagedDirection(i, -1))
-         {
-            if(CloseManagedPositionsForSymbol(sym, "FXRC exit short"))
-               RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-         }
-      }
-      else if(cur_count == 0)
-      {
-         if(!allow_new_entries || !trade_allowed)
-            continue;
-
-         if(foreign_active)
-         {
-            if(target != 0)
-               PrintFormat("Skipping %s because a non-FXRC active order/position already exists on the symbol.", sym);
-            continue;
-         }
-
-         if(target == 1)
-         {
-            if(active_orders_total >= InpMaxAccountOrders)
-            {
-               PrintFormat("Skipping %s long entry because account active order cap %d is reached.", sym, InpMaxAccountOrders);
-               continue;
-            }
-
-            if(OpenManagedPosition(i, 1, cycle_snapshot))
-               RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-         }
-         else if(target == -1)
-         {
-            if(active_orders_total >= InpMaxAccountOrders)
-            {
-               PrintFormat("Skipping %s short entry because account active order cap %d is reached.", sym, InpMaxAccountOrders);
-               continue;
-            }
-
-            if(OpenManagedPosition(i, -1, cycle_snapshot))
-               RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
-         }
-      }
-   }
+      ExecuteSymbolTarget(
+         i,
+         target_dir,
+         cycle_snapshot,
+         active_orders_total,
+         allow_new_entries
+      );
 
    ClearSignalBarAdvanceFlags();
 }

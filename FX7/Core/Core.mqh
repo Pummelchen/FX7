@@ -812,283 +812,275 @@ bool ParseSymbols()
    return (g_num_symbols >= 1);
 }
 
-// Validates inputs.
-bool ValidateInputs()
+// Prints the validation error and returns false.
+bool FailInputValidation(const string message)
+{
+   Print(message);
+   return false;
+}
+
+// Validates premia, macro, and allocator inputs.
+bool ValidatePremiaInputs()
 {
    if(InpMagicNumber <= 0)
-   {
-      Print("InpMagicNumber must be > 0.");
-      return false;
-   }
+      return FailInputValidation("InpMagicNumber must be > 0.");
    if(InpMaxAcceptedSignals <= 0)
-   {
-      Print("InpMaxAcceptedSignals must be > 0.");
-      return false;
-   }
+      return FailInputValidation("InpMaxAcceptedSignals must be > 0.");
    if(InpWeightMomentum < 0.0 || InpWeightCarry < 0.0 || InpWeightValue < 0.0)
-   {
-      Print("Premia weights must be >= 0.");
-      return false;
-   }
+      return FailInputValidation("Premia weights must be >= 0.");
    if((InpWeightMomentum + InpWeightCarry + InpWeightValue) <= EPS())
-   {
-      Print("At least one premia weight must be > 0.");
-      return false;
-   }
+      return FailInputValidation("At least one premia weight must be > 0.");
    if(InpCarryMaxDataAgeDays <= 0 || InpCarryReloadHours <= 0)
+      return FailInputValidation("Carry cache freshness inputs must be > 0.");
+   if(InpValueLookbackBars < 30
+      || InpValueHalfLifeBars <= 1
+      || InpValueHalfLifeBars >= InpValueLookbackBars)
    {
-      Print("Carry cache freshness inputs must be > 0.");
-      return false;
-   }
-   if(InpValueLookbackBars < 30 || InpValueHalfLifeBars <= 1 || InpValueHalfLifeBars >= InpValueLookbackBars)
-   {
-      Print("Value lookback inputs are invalid.");
-      return false;
+      return FailInputValidation("Value lookback inputs are invalid.");
    }
    if(InpPPPMaxDataAgeDays <= 0 || InpPPPReloadHours <= 0)
-   {
-      Print("PPP cache freshness inputs must be > 0.");
-      return false;
-   }
+      return FailInputValidation("PPP cache freshness inputs must be > 0.");
    if(InpPPPGapScale <= 0.0)
-   {
-      Print("InpPPPGapScale must be > 0.");
-      return false;
-   }
+      return FailInputValidation("InpPPPGapScale must be > 0.");
    if(InpPPPBlendWeight < 0.0 || InpProxyBlendWeight < 0.0)
+      return FailInputValidation("PPP/proxy blend weights must be >= 0.");
+   if(InpValueModel == FXRC_VALUE_MODEL_HYBRID
+      && (InpPPPBlendWeight + InpProxyBlendWeight) <= EPS())
    {
-      Print("PPP/proxy blend weights must be >= 0.");
-      return false;
-   }
-   if(InpValueModel == FXRC_VALUE_MODEL_HYBRID && (InpPPPBlendWeight + InpProxyBlendWeight) <= EPS())
-   {
-      Print("Hybrid value mode requires at least one positive blend weight.");
-      return false;
+      return FailInputValidation(
+         "Hybrid value mode requires at least one positive blend weight."
+      );
    }
    if(InpValueSignalScale <= 0.0 || InpCarrySignalScale <= 0.0)
+      return FailInputValidation("Carry/value signal scales must be > 0.");
+   if(InpAllocatorMomentumBoost < 0.0
+      || InpAllocatorValueBoost < 0.0
+      || InpAllocatorCarryVolPenalty < 0.0
+      || InpCarryVolCutoff <= 0.0)
    {
-      Print("Carry/value signal scales must be > 0.");
-      return false;
-   }
-   if(InpAllocatorMomentumBoost < 0.0 || InpAllocatorValueBoost < 0.0 || InpAllocatorCarryVolPenalty < 0.0 || InpCarryVolCutoff <= 0.0)
-   {
-      Print("Allocator inputs are invalid.");
-      return false;
+      return FailInputValidation("Allocator inputs are invalid.");
    }
    if(InpTanhScale <= 0.0)
-   {
-      Print("InpTanhScale must be > 0.");
-      return false;
-   }
+      return FailInputValidation("InpTanhScale must be > 0.");
+
+   return true;
+}
+
+// Validates signal-window, ranking, and execution preconditions.
+bool ValidateSignalAndExecutionInputs()
+{
    if(InpMaxAccountOrders <= 0)
-   {
-      Print("InpMaxAccountOrders must be > 0.");
-      return false;
-   }
+      return FailInputValidation("InpMaxAccountOrders must be > 0.");
    if(InpH1 <= 0 || InpH2 <= InpH1 || InpH3 <= InpH2)
-   {
-      Print("Trend horizons must satisfy 0 < H1 < H2 < H3.");
-      return false;
-   }
+      return FailInputValidation("Trend horizons must satisfy 0 < H1 < H2 < H3.");
    if(InpERWindow <= 1 || InpBreakoutWindow <= 1 || InpShortReversalWindow <= 1)
-   {
-      Print("ER, breakout, and short reversal windows must be > 1.");
-      return false;
-   }
+      return FailInputValidation("ER, breakout, and short reversal windows must be > 1.");
    if(InpVolShortHalfLife <= 0 || InpVolLongHalfLife <= 0 || InpATRWindow <= 1)
    {
-      Print("Volatility windows must be positive and ATR window must be > 1.");
-      return false;
+      return FailInputValidation(
+         "Volatility windows must be positive and ATR window must be > 1."
+      );
    }
    if(InpGammaB <= 0.0)
-   {
-      Print("InpGammaB must be > 0.");
-      return false;
-   }
+      return FailInputValidation("InpGammaB must be > 0.");
    if(InpCorrLookback < 10)
-   {
-      Print("InpCorrLookback must be at least 10.");
-      return false;
-   }
+      return FailInputValidation("InpCorrLookback must be at least 10.");
    if(InpMinCandidatesForOrtho < 2)
-   {
-      Print("InpMinCandidatesForOrtho must be at least 2.");
-      return false;
-   }
+      return FailInputValidation("InpMinCandidatesForOrtho must be at least 2.");
    if(InpPersistenceBars <= 0)
+      return FailInputValidation("InpPersistenceBars must be > 0.");
+   if(InpSlippagePoints < 0
+      || InpTradeRetryCount < 0
+      || InpTradeVerifyAttempts <= 0)
    {
-      Print("InpPersistenceBars must be > 0.");
-      return false;
-   }
-   if(InpSlippagePoints < 0 || InpTradeRetryCount < 0 || InpTradeVerifyAttempts <= 0)
-   {
-      Print("Execution inputs are invalid.");
-      return false;
+      return FailInputValidation("Execution inputs are invalid.");
    }
    if(InpSymbolDataFailureGraceBars < 0)
-   {
-      Print("InpSymbolDataFailureGraceBars must be >= 0.");
-      return false;
-   }
+      return FailInputValidation("InpSymbolDataFailureGraceBars must be >= 0.");
    if(InpClassicReferenceEURUSDLots <= 0.0)
+      return FailInputValidation("InpClassicReferenceEURUSDLots must be > 0.");
+
+   return true;
+}
+
+// Validates risk limits and trade-model settings.
+bool ValidateRiskAndModelInputs()
+{
+   if(InpRiskPerTradePct <= 0.0
+      || InpMaxPortfolioRiskPct <= 0.0
+      || InpMaxPortfolioExposurePct <= 0.0
+      || InpMaxMarginUsagePct <= 0.0)
    {
-      Print("InpClassicReferenceEURUSDLots must be > 0.");
-      return false;
-   }
-   if(InpRiskPerTradePct <= 0.0 || InpMaxPortfolioRiskPct <= 0.0 || InpMaxPortfolioExposurePct <= 0.0 || InpMaxMarginUsagePct <= 0.0)
-   {
-      Print("Risk limits must be > 0.");
-      return false;
+      return FailInputValidation("Risk limits must be > 0.");
    }
    if(InpCatastrophicStopATR <= 0.0)
+      return FailInputValidation("InpCatastrophicStopATR must be > 0.");
+   if(InpClassicSinglePositionTakeProfitUSD < 0.0
+      || InpClassicSessionResetProfitUSD < 0.0)
    {
-      Print("InpCatastrophicStopATR must be > 0.");
-      return false;
+      return FailInputValidation("USD profit targets must be >= 0.");
    }
-   if(InpClassicSinglePositionTakeProfitUSD < 0.0 || InpClassicSessionResetProfitUSD < 0.0)
+   if(Trade_Model != FXRC_TRADE_MODEL_CLASSIC
+      && Trade_Model != FXRC_TRADE_MODEL_MODERN)
    {
-      Print("USD profit targets must be >= 0.");
-      return false;
-   }
-   if(Trade_Model != FXRC_TRADE_MODEL_CLASSIC && Trade_Model != FXRC_TRADE_MODEL_MODERN)
-   {
-      Print("Trade_Model is invalid.");
-      return false;
+      return FailInputValidation("Trade_Model is invalid.");
    }
    if(InpModernBaseTargetRiskPct <= 0.0 || InpModernMinTargetRiskPct <= 0.0)
-   {
-      Print("Modern risk targets must be > 0.");
-      return false;
-   }
+      return FailInputValidation("Modern risk targets must be > 0.");
    if(InpModernMinTargetRiskPct - EPS() > InpModernBaseTargetRiskPct)
    {
-      Print("InpModernMinTargetRiskPct must be <= InpModernBaseTargetRiskPct.");
-      return false;
+      return FailInputValidation(
+         "InpModernMinTargetRiskPct must be <= InpModernBaseTargetRiskPct."
+      );
    }
    if(InpModernBaseTargetRiskPct - EPS() > InpRiskPerTradePct)
+      return FailInputValidation("InpModernBaseTargetRiskPct must be <= InpRiskPerTradePct.");
+   if(InpModernTargetATRPct <= 0.0
+      || InpModernVolAdjustMin <= 0.0
+      || InpModernVolAdjustMax <= 0.0
+      || InpModernVolAdjustMin - EPS() > InpModernVolAdjustMax)
    {
-      Print("InpModernBaseTargetRiskPct must be <= InpRiskPerTradePct.");
-      return false;
-   }
-   if(InpModernTargetATRPct <= 0.0 || InpModernVolAdjustMin <= 0.0 || InpModernVolAdjustMax <= 0.0 || InpModernVolAdjustMin - EPS() > InpModernVolAdjustMax)
-   {
-      Print("Modern volatility targeting inputs are invalid.");
-      return false;
+      return FailInputValidation("Modern volatility targeting inputs are invalid.");
    }
    if(InpModernCovariancePenaltyFloor <= 0.0 || InpModernCovariancePenaltyFloor > 1.0)
-   {
-      Print("InpModernCovariancePenaltyFloor must be in (0,1].");
-      return false;
-   }
+      return FailInputValidation("InpModernCovariancePenaltyFloor must be in (0,1].");
    if(InpModernForecastRiskATRScale <= 0.0)
-   {
-      Print("InpModernForecastRiskATRScale must be > 0.");
-      return false;
-   }
+      return FailInputValidation("InpModernForecastRiskATRScale must be > 0.");
    if(EAStopMinEqui < 0 || EAStopMaxDD < 0.0)
-   {
-      Print("EA hard-stop inputs must be >= 0.");
-      return false;
-   }
+      return FailInputValidation("EA hard-stop inputs must be >= 0.");
+
+   return true;
+}
+
+// Validates classic overlay behavior and trailing configuration.
+bool ValidateClassicOverlayInputs()
+{
    if(InpClassicUseTrailingStop != 0 && InpClassicUseTrailingStop != 1)
-   {
-      Print("InpClassicUseTrailingStop must be 0 or 1.");
-      return false;
-   }
+      return FailInputValidation("InpClassicUseTrailingStop must be 0 or 1.");
    if(InpClassicUseTrailingStop == 1)
    {
-      if(InpClassicTrailStartPct < 10 || InpClassicTrailStartPct > 100 || (InpClassicTrailStartPct % 10) != 0)
+      if(InpClassicTrailStartPct < 10
+         || InpClassicTrailStartPct > 100
+         || (InpClassicTrailStartPct % 10) != 0)
       {
-         Print("InpClassicTrailStartPct must be between 10 and 100 in 10% steps.");
-         return false;
+         return FailInputValidation(
+            "InpClassicTrailStartPct must be between 10 and 100 in 10% steps."
+         );
       }
-      if(InpClassicTrailSpacingPct < 10 || InpClassicTrailSpacingPct > 100 || (InpClassicTrailSpacingPct % 10) != 0)
+      if(InpClassicTrailSpacingPct < 10
+         || InpClassicTrailSpacingPct > 100
+         || (InpClassicTrailSpacingPct % 10) != 0)
       {
-         Print("InpClassicTrailSpacingPct must be between 10 and 100 in 10% steps.");
-         return false;
+         return FailInputValidation(
+            "InpClassicTrailSpacingPct must be between 10 and 100 in 10% steps."
+         );
       }
    }
-   if(IsClassicTradeModel() && InpClassicUseTrailingStop == 1 && InpClassicSinglePositionTakeProfitUSD <= 0.0)
+   if(IsClassicTradeModel()
+      && InpClassicUseTrailingStop == 1
+      && InpClassicSinglePositionTakeProfitUSD <= 0.0)
    {
-      Print("Classic mode with trailing enabled requires InpClassicSinglePositionTakeProfitUSD > 0 as the trailing activation anchor.");
-      return false;
+      return FailInputValidation(
+         "Classic mode with trailing enabled requires "
+         + "InpClassicSinglePositionTakeProfitUSD > 0 as the trailing "
+         + "activation anchor."
+      );
    }
-   if(InpBaseEntryThreshold < 0.0 || InpBaseExitThreshold < 0.0 || InpReversalThreshold < 0.0 || InpTheta0 < 0.0)
+
+   return true;
+}
+
+// Validates threshold, gating, and ranking controls.
+bool ValidateThresholdInputs()
+{
+   if(InpBaseEntryThreshold < 0.0
+      || InpBaseExitThreshold < 0.0
+      || InpReversalThreshold < 0.0
+      || InpTheta0 < 0.0)
    {
-      Print("Threshold inputs must be >= 0.");
-      return false;
+      return FailInputValidation("Threshold inputs must be >= 0.");
    }
    if(InpAlphaSmooth < 0.0 || InpAlphaSmooth > 1.0)
-   {
-      Print("InpAlphaSmooth must be in [0, 1].");
-      return false;
-   }
+      return FailInputValidation("InpAlphaSmooth must be in [0, 1].");
    if(InpConfSlope <= 0.0)
+      return FailInputValidation("InpConfSlope must be > 0.");
+   if(InpEtaCost < 0.0
+      || InpEtaVol < 0.0
+      || InpEtaBreakout < 0.0
+      || InpGammaCost < 0.0)
    {
-      Print("InpConfSlope must be > 0.");
-      return false;
-   }
-   if(InpEtaCost < 0.0 || InpEtaVol < 0.0 || InpEtaBreakout < 0.0 || InpGammaCost < 0.0)
-   {
-      Print("Threshold penalty inputs must be >= 0.");
-      return false;
+      return FailInputValidation("Threshold penalty inputs must be >= 0.");
    }
    if(InpBaseExitThreshold > InpBaseEntryThreshold)
-   {
-      Print("InpBaseExitThreshold should not exceed InpBaseEntryThreshold.");
-      return false;
-   }
+      return FailInputValidation("InpBaseExitThreshold should not exceed InpBaseEntryThreshold.");
    if(InpMinConfidence < 0.0 || InpMinConfidence > 1.0)
+      return FailInputValidation("InpMinConfidence must be in [0, 1].");
+   if(InpMinRegimeGate < 0.0
+      || InpMinRegimeGate > 1.0
+      || InpHardMinRegimeGate < 0.0
+      || InpHardMinRegimeGate > 1.0
+      || InpMinExecGate < 0.0
+      || InpMinExecGate > 1.0)
    {
-      Print("InpMinConfidence must be in [0, 1].");
-      return false;
+      return FailInputValidation("Gate thresholds must be in [0, 1].");
    }
-   if(InpMinRegimeGate < 0.0 || InpHardMinRegimeGate < 0.0 || InpMinExecGate < 0.0)
+   if(InpUniquenessMin < 0.0
+      || InpUniquenessMin > 1.0
+      || InpCrowdingMax < 0.0
+      || InpCrowdingMax > 1.0)
    {
-      Print("Gate thresholds must be >= 0.");
-      return false;
-   }
-   if(InpUniquenessMin < 0.0 || InpUniquenessMin > 1.0 || InpCrowdingMax < 0.0 || InpCrowdingMax > 1.0)
-   {
-      Print("Uniqueness and crowding thresholds must be in [0, 1].");
-      return false;
+      return FailInputValidation(
+         "Uniqueness and crowding thresholds must be in [0, 1]."
+      );
    }
    if(InpShrinkageLambda < 0.0 || InpShrinkageLambda > 1.0)
+      return FailInputValidation("InpShrinkageLambda must be in [0, 1].");
+   if(InpNoveltyFloorWeight < 0.0
+      || InpNoveltyFloorWeight > 1.0
+      || InpNoveltyCap <= 0.0)
    {
-      Print("InpShrinkageLambda must be in [0, 1].");
-      return false;
+      return FailInputValidation("Novelty overlay inputs are invalid.");
    }
-   if(InpNoveltyFloorWeight < 0.0 || InpNoveltyFloorWeight > 1.0 || InpNoveltyCap <= 0.0)
+   if(InpFXOverlapFloor < -1.0
+      || InpFXOverlapFloor > 1.0
+      || InpClassOverlapFloor < -1.0
+      || InpClassOverlapFloor > 1.0)
    {
-      Print("Novelty overlay inputs are invalid.");
-      return false;
+      return FailInputValidation("Overlap floors must be in [-1, 1].");
    }
-   if(InpFXOverlapFloor < -1.0 || InpFXOverlapFloor > 1.0 || InpClassOverlapFloor < -1.0 || InpClassOverlapFloor > 1.0)
-   {
-      Print("Overlap floors must be in [-1, 1].");
-      return false;
-   }
+
+   return true;
+}
+
+// Validates cost inputs and initializes normalized trend weights.
+bool ValidateCostInputsAndTrendWeights()
+{
    if(InpExpectedHoldingDays < 0.0 || InpCommissionRoundTripPerLotEUR < 0.0 || InpAssumedRoundTripFeePct < 0.0)
-   {
-      Print("Cost inputs must be >= 0.");
-      return false;
-   }
+      return FailInputValidation("Cost inputs must be >= 0.");
    if(InpDependencyFailureGraceMinutes < 0)
-   {
-      Print("InpDependencyFailureGraceMinutes must be >= 0.");
-      return false;
-   }
+      return FailInputValidation("InpDependencyFailureGraceMinutes must be >= 0.");
+
    double wsum = InpW1 + InpW2 + InpW3;
    if(wsum <= EPS())
-   {
-      Print("Trend weights must sum to a positive value.");
-      return false;
-   }
+      return FailInputValidation("Trend weights must sum to a positive value.");
 
    g_w1 = InpW1 / wsum;
    g_w2 = InpW2 / wsum;
    g_w3 = InpW3 / wsum;
    return true;
+}
+
+// Validates inputs.
+bool ValidateInputs()
+{
+   return (
+      ValidatePremiaInputs()
+      && ValidateSignalAndExecutionInputs()
+      && ValidateRiskAndModelInputs()
+      && ValidateClassicOverlayInputs()
+      && ValidateThresholdInputs()
+      && ValidateCostInputsAndTrendWeights()
+   );
 }
 
 // Inspects history readiness for the requested symbol and timeframe.

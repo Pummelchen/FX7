@@ -1,6 +1,7 @@
 //------------------------- Inputs -----------------------------------//
 input group "=== Universe / Schedule ==="
-input string             InpSymbols                   = "EURUSD,GBPUSD,USDJPY,AUDUSD,USDCAD,USDCHF,EURJPY,GBPJPY,EURGBP,AUDNZD"; 
+input string             InpSymbols                   =
+   "EURUSD,GBPUSD,USDJPY,AUDUSD,USDCAD,USDCHF,EURJPY,GBPJPY,EURGBP,AUDNZD";
 input string             InpTradableSymbols           = "";
 input ENUM_TIMEFRAMES    InpSignalTF                  = PERIOD_M15;
 input bool               InpDebugStartupSequence      = false;

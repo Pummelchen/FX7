@@ -1,27 +1,25 @@
-// Updates symbol features.
-bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values = false)
+// Loads the rates and close series needed for feature construction.
+bool LoadFeaturePriceSeries(const string symbol,
+                            MqlRates &rates[],
+                            int &copied,
+                            double &close[])
 {
-   string sym = g_symbols[i];
-   if(ArraySize(g_symbol_history_ready) == g_num_symbols && !g_symbol_history_ready[i])
-      return false;
-
-   int bars_needed = SignalBarsNeeded();
-
-   MqlRates rates[];
-   int copied = 0;
    string history_reason;
-   if(!LoadRatesWindow(sym, InpSignalTF, bars_needed, rates, copied, history_reason))
+   if(!LoadRatesWindow(
+      symbol,
+      InpSignalTF,
+      SignalBarsNeeded(),
+      rates,
+      copied,
+      history_reason))
    {
       if(!MQLInfoInteger(MQL_TESTER) || g_tester_diag_logs < 20)
-      {
          Print(history_reason);
-      }
       if(MQLInfoInteger(MQL_TESTER))
          g_tester_diag_logs++;
       return false;
    }
 
-   double close[];
    ArrayResize(close, copied);
    ArraySetAsSeries(close, true);
    for(int k=0; k<copied; ++k)
@@ -30,13 +28,34 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
    if(close[1] <= 0.0 || close[2] <= 0.0)
       return false;
 
-   g_sigma_short[i] = EWMAStdFromCloses(close, MathMin(g_ret_hist_len, copied - 2), InpVolShortHalfLife);
-   g_sigma_long[i]  = EWMAStdFromCloses(close, MathMin(g_ret_hist_len, copied - 2), InpVolLongHalfLife);
-   g_atr_pct[i]     = ATRPctFromRates(rates, InpATRWindow);
+   return true;
+}
 
-   double z1 = MathLog(close[1] / close[InpH1 + 1]) / (g_sigma_long[i] * MathSqrt((double)InpH1) + EPS());
-   double z2 = MathLog(close[1] / close[InpH2 + 1]) / (g_sigma_long[i] * MathSqrt((double)InpH2) + EPS());
-   double z3 = MathLog(close[1] / close[InpH3 + 1]) / (g_sigma_long[i] * MathSqrt((double)InpH3) + EPS());
+// Computes the trend, volatility, and regime feature set for one symbol.
+void ComputeTrendFeatureState(const int i,
+                              const MqlRates &rates[],
+                              const int copied,
+                              const double &close[])
+{
+   int vol_lookback = MathMin(g_ret_hist_len, copied - 2);
+   g_sigma_short[i] = EWMAStdFromCloses(
+      close,
+      vol_lookback,
+      InpVolShortHalfLife
+   );
+   g_sigma_long[i] = EWMAStdFromCloses(
+      close,
+      vol_lookback,
+      InpVolLongHalfLife
+   );
+   g_atr_pct[i] = ATRPctFromRates(rates, InpATRWindow);
+
+   double sigma_scale_h1 = g_sigma_long[i] * MathSqrt((double)InpH1) + EPS();
+   double sigma_scale_h2 = g_sigma_long[i] * MathSqrt((double)InpH2) + EPS();
+   double sigma_scale_h3 = g_sigma_long[i] * MathSqrt((double)InpH3) + EPS();
+   double z1 = MathLog(close[1] / close[InpH1 + 1]) / sigma_scale_h1;
+   double z2 = MathLog(close[1] / close[InpH2 + 1]) / sigma_scale_h2;
+   double z3 = MathLog(close[1] / close[InpH3 + 1]) / sigma_scale_h3;
 
    z1 = Clip(z1, -6.0, 6.0);
    z2 = Clip(z2, -6.0, 6.0);
@@ -58,7 +77,12 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
 
    g_V[i] = g_sigma_short[i] / (g_sigma_long[i] + EPS());
 
-   double zrev = MathLog(close[1] / close[InpShortReversalWindow + 1]) / (g_sigma_long[i] * MathSqrt((double)InpShortReversalWindow) + EPS());
+   double reversal_scale = (
+      g_sigma_long[i] * MathSqrt((double)InpShortReversalWindow) + EPS()
+   );
+   double zrev = (
+      MathLog(close[1] / close[InpShortReversalWindow + 1]) / reversal_scale
+   );
    zrev = Clip(zrev, -6.0, 6.0);
    g_D[i] = MathMax(0.0, -(double)SignD(g_M[i]) * zrev);
 
@@ -72,43 +96,87 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
           * MathPow(MathMax(g_ER[i], 0.0), InpGammaER)
           * MathExp(-InpGammaV * PosPart(g_V[i] - InpV0))
           * MathExp(-InpGammaD * g_D[i] * PosPart(g_V[i] - InpV0));
+}
 
-   double mid_px;
-   if(!GetAnalyticalMidPrice(sym, mid_px))
+// Builds the execution-cost context and decision timestamp for one symbol.
+bool BuildExecutionCostContext(const string symbol,
+                               const MqlRates &rates[],
+                               const double &close[],
+                               double &mid_px,
+                               double &signal_px,
+                               datetime &signal_time,
+                               double &total_cost_frac_long,
+                               double &total_cost_frac_short)
+{
+   if(!GetAnalyticalMidPrice(symbol, mid_px))
       return false;
 
    MqlTick tick;
    double spread_frac = 0.0;
-   if(GetMidPrice(sym, tick, mid_px))
+   if(GetMidPrice(symbol, tick, mid_px))
       spread_frac = (tick.ask - tick.bid) / MathMax(mid_px, EPS());
    else
    {
-      double point = SymbolInfoDouble(sym, SYMBOL_POINT);
-      long spread_points = SymbolInfoInteger(sym, SYMBOL_SPREAD);
+      double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
+      long spread_points = SymbolInfoInteger(symbol, SYMBOL_SPREAD);
       if(point > 0.0 && spread_points > 0.0)
          spread_frac = ((double)spread_points * point) / MathMax(mid_px, EPS());
    }
-   double slip_frac = SlippageFracEstimate(sym, spread_frac);
-   double total_cost_frac_long = EstimateRoundTripCostFraction(sym, 1, mid_px, spread_frac, slip_frac);
-   double total_cost_frac_short = EstimateRoundTripCostFraction(sym, -1, mid_px, spread_frac, slip_frac);
+
+   double slip_frac = SlippageFracEstimate(symbol, spread_frac);
+   total_cost_frac_long = EstimateRoundTripCostFraction(
+      symbol,
+      1,
+      mid_px,
+      spread_frac,
+      slip_frac
+   );
+   total_cost_frac_short = EstimateRoundTripCostFraction(
+      symbol,
+      -1,
+      mid_px,
+      spread_frac,
+      slip_frac
+   );
    if(g_conversion_error_active)
       return false;
 
-   double signal_px = close[1];
+   signal_px = close[1];
    if(signal_px <= 0.0)
       signal_px = mid_px;
+
    // Use the decision timestamp at the new-bar open, not the prior bar's open time.
-   datetime signal_time = rates[0].time;
+   signal_time = rates[0].time;
    if(signal_time <= 0)
       signal_time = rates[1].time;
 
+   return true;
+}
+
+// Refreshes the carry features for the current symbol.
+bool RefreshCarryFeatureState(const int i,
+                              const string symbol,
+                              const double signal_px,
+                              const datetime signal_time,
+                              const bool allow_stale_dependency_values)
+{
    double carry_signal = 0.0;
    double carry_spread = 0.0;
    datetime carry_macro_date = 0;
    string carry_reason;
    bool carry_ok = true;
    if(CarrySleeveEnabled())
-      carry_ok = ComputeCarrySignal(sym, signal_px, signal_time, carry_signal, carry_spread, carry_macro_date, carry_reason);
+   {
+      carry_ok = ComputeCarrySignal(
+         symbol,
+         signal_px,
+         signal_time,
+         carry_signal,
+         carry_spread,
+         carry_macro_date,
+         carry_reason
+      );
+   }
 
    if(!carry_ok)
    {
@@ -117,7 +185,11 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
          if(!allow_stale_dependency_values || !g_symbol_data_ok[i])
          {
             if(!MQLInfoInteger(MQL_TESTER) || g_tester_diag_logs < 20)
-               PrintFormat("Carry signal unavailable for %s: %s", sym, carry_reason);
+               PrintFormat(
+                  "Carry signal unavailable for %s: %s",
+                  symbol,
+                  carry_reason
+               );
             if(MQLInfoInteger(MQL_TESTER))
                g_tester_diag_logs++;
             return false;
@@ -129,7 +201,16 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
    }
    g_Carry[i] = carry_signal;
    g_CarryAnnualSpread[i] = carry_spread;
+   return true;
+}
 
+// Refreshes the value features for the current symbol.
+bool RefreshValueFeatureState(const int i,
+                              const string symbol,
+                              const double signal_px,
+                              const datetime signal_time,
+                              const bool allow_stale_dependency_values)
+{
    double value_signal = 0.0;
    double value_gap = 0.0;
    double value_proxy_signal = 0.0;
@@ -141,9 +222,23 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
    string value_reason;
    bool value_ok = true;
    if(ValueSleeveEnabled())
-      value_ok = ResolveValueSignal(sym, signal_px, signal_time,
-                                    value_signal, value_gap, value_proxy_signal, value_ppp_signal,
-                                    value_fair_px, value_macro_date, value_ppp_weight, value_reliability, value_reason, g_V[i]);
+   {
+      value_ok = ResolveValueSignal(
+         symbol,
+         signal_px,
+         signal_time,
+         value_signal,
+         value_gap,
+         value_proxy_signal,
+         value_ppp_signal,
+         value_fair_px,
+         value_macro_date,
+         value_ppp_weight,
+         value_reliability,
+         value_reason,
+         g_V[i]
+      );
+   }
 
    if(!value_ok)
    {
@@ -152,7 +247,11 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
          if(!allow_stale_dependency_values || !g_symbol_data_ok[i])
          {
             if(!MQLInfoInteger(MQL_TESTER) || g_tester_diag_logs < 20)
-               PrintFormat("Value signal unavailable for %s: %s", sym, value_reason);
+               PrintFormat(
+                  "Value signal unavailable for %s: %s",
+                  symbol,
+                  value_reason
+               );
             if(MQLInfoInteger(MQL_TESTER))
                g_tester_diag_logs++;
             return false;
@@ -177,7 +276,15 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
    g_ValueGap[i] = value_gap;
    g_ValueMacroDate[i] = value_macro_date;
    g_CompositeCore[i] = BuildCompositePremiaAlpha(i);
+   return true;
+}
 
+// Stores cost penalties and standardized return history for one symbol.
+void StoreCostAndReturnHistory(const int i,
+                               const double total_cost_frac_long,
+                               const double total_cost_frac_short,
+                               const double &close[])
+{
    g_K_long[i] = total_cost_frac_long / (g_atr_pct[i] + EPS());
    g_K_short[i] = total_cost_frac_short / (g_atr_pct[i] + EPS());
    g_Q_long[i] = MathExp(-InpGammaCost * g_K_long[i]);
@@ -190,6 +297,66 @@ bool UpdateSymbolFeatures(const int i, const bool allow_stale_dependency_values 
       double r = MathLog(close[lag + 1] / close[lag + 2]);
       g_stdret_hist[i * g_ret_hist_len + lag] = r / (g_sigma_long[i] + EPS());
    }
+}
+
+// Updates symbol features.
+bool UpdateSymbolFeatures(const int i,
+                          const bool allow_stale_dependency_values = false)
+{
+   if(ArraySize(g_symbol_history_ready) == g_num_symbols
+      && !g_symbol_history_ready[i])
+   {
+      return false;
+   }
+
+   string symbol = g_symbols[i];
+   MqlRates rates[];
+   int copied = 0;
+   double close[];
+   if(!LoadFeaturePriceSeries(symbol, rates, copied, close))
+      return false;
+
+   ComputeTrendFeatureState(i, rates, copied, close);
+
+   double mid_px = 0.0;
+   double signal_px = 0.0;
+   datetime signal_time = 0;
+   double total_cost_frac_long = 0.0;
+   double total_cost_frac_short = 0.0;
+   if(!BuildExecutionCostContext(
+      symbol,
+      rates,
+      close,
+      mid_px,
+      signal_px,
+      signal_time,
+      total_cost_frac_long,
+      total_cost_frac_short))
+   {
+      return false;
+   }
+
+   if(!RefreshCarryFeatureState(
+      i,
+      symbol,
+      signal_px,
+      signal_time,
+      allow_stale_dependency_values))
+   {
+      return false;
+   }
+
+   if(!RefreshValueFeatureState(
+      i,
+      symbol,
+      signal_px,
+      signal_time,
+      allow_stale_dependency_values))
+   {
+      return false;
+   }
+
+   StoreCostAndReturnHistory(i, total_cost_frac_long, total_cost_frac_short, close);
    NoteSymbolFeatureRefreshSuccess(i);
    return true;
 }
@@ -201,7 +368,11 @@ void NeutralizeSymbol(const int i)
    g_symbol_data_stale[i] = false;
    g_M[i] = g_A[i] = g_ER[i] = g_V[i] = g_D[i] = g_BK[i] = 0.0;
    g_Carry[i] = g_Value[i] = g_CompositeCore[i] = 0.0;
-   g_ValueProxy[i] = g_ValuePPP[i] = g_ValueFairValue[i] = g_ValuePPPWeight[i] = g_ValueReliability[i] = 0.0;
+   g_ValueProxy[i] = 0.0;
+   g_ValuePPP[i] = 0.0;
+   g_ValueFairValue[i] = 0.0;
+   g_ValuePPPWeight[i] = 0.0;
+   g_ValueReliability[i] = 0.0;
    g_CarryAnnualSpread[i] = g_ValueGap[i] = 0.0;
    g_ValueMacroDate[i] = 0;
    g_G[i] = g_K[i] = g_K_long[i] = g_K_short[i] = 0.0;
@@ -282,18 +453,40 @@ double EstimateRoundTripCostFraction(const string symbol,
       return spread_frac + 2.0 * slip_frac + InpAssumedRoundTripFeePct;
 
    double commission_frac = InpCommissionRoundTripPerLotEUR / notional_eur;
-   double swap_long_frac = MathAbs(EstimateSwapCashEURPerDay(symbol, 1, 1.0, mid_px)) * InpExpectedHoldingDays / notional_eur;
-   double swap_short_frac = MathAbs(EstimateSwapCashEURPerDay(symbol, -1, 1.0, mid_px)) * InpExpectedHoldingDays / notional_eur;
-   double swap_frac = DirectionalValue(dir, swap_long_frac, swap_short_frac, MathMax(swap_long_frac, swap_short_frac));
+   double swap_long_frac = (
+      MathAbs(EstimateSwapCashEURPerDay(symbol, 1, 1.0, mid_px))
+      * InpExpectedHoldingDays
+      / notional_eur
+   );
+   double swap_short_frac = (
+      MathAbs(EstimateSwapCashEURPerDay(symbol, -1, 1.0, mid_px))
+      * InpExpectedHoldingDays
+      / notional_eur
+   );
+   double swap_frac = DirectionalValue(
+      dir,
+      swap_long_frac,
+      swap_short_frac,
+      MathMax(swap_long_frac, swap_short_frac)
+   );
 
    return spread_frac + 2.0 * slip_frac + InpAssumedRoundTripFeePct + commission_frac + swap_frac;
 }
 
 // Estimates swap cash EUR per day.
-double EstimateSwapCashEURPerDay(const string symbol, const int dir, const double volume, const double ref_price)
+double EstimateSwapCashEURPerDay(const string symbol,
+                                 const int dir,
+                                 const double volume,
+                                 const double ref_price)
 {
-   double swap_value = (dir > 0 ? SymbolInfoDouble(symbol, SYMBOL_SWAP_LONG) : SymbolInfoDouble(symbol, SYMBOL_SWAP_SHORT));
-   ENUM_SYMBOL_SWAP_MODE swap_mode = (ENUM_SYMBOL_SWAP_MODE)SymbolInfoInteger(symbol, SYMBOL_SWAP_MODE);
+   double swap_value = (
+      dir > 0
+      ? SymbolInfoDouble(symbol, SYMBOL_SWAP_LONG)
+      : SymbolInfoDouble(symbol, SYMBOL_SWAP_SHORT)
+   );
+   ENUM_SYMBOL_SWAP_MODE swap_mode = (
+      ENUM_SYMBOL_SWAP_MODE
+   )SymbolInfoInteger(symbol, SYMBOL_SWAP_MODE);
    string base_ccy = SymbolInfoString(symbol, SYMBOL_CURRENCY_BASE);
    string quote_ccy = SymbolInfoString(symbol, SYMBOL_CURRENCY_PROFIT);
    string margin_ccy = SymbolInfoString(symbol, SYMBOL_CURRENCY_MARGIN);
@@ -344,6 +537,15 @@ double EstimateSwapCashEURPerDay(const string symbol, const int dir, const doubl
    return 0.0;
 }
 
+// Returns whether the currency belongs to the major G10 FX set.
+bool IsMajorFXCurrency(const string ccy)
+{
+   return (
+      ccy == "USD" || ccy == "EUR" || ccy == "JPY" || ccy == "GBP"
+      || ccy == "CHF" || ccy == "AUD" || ccy == "CAD" || ccy == "NZD"
+   );
+}
+
 // Estimates slippage as a fraction of price.
 double SlippageFracEstimate(const string symbol, const double spread_frac)
 {
@@ -352,8 +554,8 @@ double SlippageFracEstimate(const string symbol, const double spread_frac)
 
    if(StringLen(base) == 3 && StringLen(quote) == 3)
    {
-      bool base_major = (base == "USD" || base == "EUR" || base == "JPY" || base == "GBP" || base == "CHF" || base == "AUD" || base == "CAD" || base == "NZD");
-      bool quote_major = (quote == "USD" || quote == "EUR" || quote == "JPY" || quote == "GBP" || quote == "CHF" || quote == "AUD" || quote == "CAD" || quote == "NZD");
+      bool base_major = IsMajorFXCurrency(base);
+      bool quote_major = IsMajorFXCurrency(quote);
       return spread_frac * ((base_major && quote_major) ? 0.25 : 0.50);
    }
 
@@ -380,8 +582,15 @@ void ComputeCompositeAllocatorWeights(const int idx, double &w_m, double &w_c, d
    if(!InpUseDynamicAllocator)
       return;
 
-   double momentum_mult = 1.0 + InpAllocatorMomentumBoost * Clip(g_BK[idx], 0.0, 1.0) * MathMax(g_A[idx], 0.0);
-   double carry_mult = MathExp(-InpAllocatorCarryVolPenalty * PosPart(g_V[idx] - InpCarryVolCutoff));
+   double momentum_mult = (
+      1.0
+      + InpAllocatorMomentumBoost
+      * Clip(g_BK[idx], 0.0, 1.0)
+      * MathMax(g_A[idx], 0.0)
+   );
+   double carry_mult = MathExp(
+      -InpAllocatorCarryVolPenalty * PosPart(g_V[idx] - InpCarryVolCutoff)
+   );
    double value_mult = 1.0 + InpAllocatorValueBoost * MathMin(MathAbs(g_Value[idx]), 1.0);
 
    w_m *= momentum_mult;

@@ -13,16 +13,20 @@ bool OpenManagedPosition(const int symbol_idx,
       return false;
    }
 
-   PrintFormat("FXRC %s entry plan on %s: volume=%.2f risk=%.2f cash notional=%.2f EUR target_risk=%.3f%% score=%.3f vol_mult=%.3f cov_mult=%.3f",
-               EnumToString(Trade_Model),
-               symbol,
-               plan.volume,
-               plan.risk_cash,
-               plan.notional_eur,
-               plan.target_risk_pct,
-               plan.sizing_score,
-               plan.volatility_multiplier,
-               plan.covariance_multiplier);
+   PrintFormat(
+      "FXRC %s entry plan on %s: volume=%.2f risk=%.2f cash "
+      + "notional=%.2f EUR target_risk=%.3f%% score=%.3f "
+      + "vol_mult=%.3f cov_mult=%.3f",
+      EnumToString(Trade_Model),
+      symbol,
+      plan.volume,
+      plan.risk_cash,
+      plan.notional_eur,
+      plan.target_risk_pct,
+      plan.sizing_score,
+      plan.volatility_multiplier,
+      plan.covariance_multiplier
+   );
 
    ENUM_ORDER_TYPE_FILLING filling;
    if(!ResolveFillingType(symbol, filling))
@@ -61,12 +65,23 @@ bool OpenManagedPosition(const int symbol_idx,
       GetManagedPositionState(symbol, actual_dir, actual_count, actual_volume, mixed);
 
       int idx = FindTrackedSymbolIndex(symbol);
-      int symbol_active_orders = (idx >= 0 ? g_exec_symbol_state[idx].account_active_orders : 0);
+      int symbol_active_orders = (
+         idx >= 0
+         ? g_exec_symbol_state[idx].account_active_orders
+         : 0
+      );
 
       if((!mixed && actual_count >= 1 && actual_dir == dir) || symbol_active_orders > 0)
       {
-         PrintFormat("Entry verification is pending on %s after dispatch; current state dir=%d count=%d mixed=%s active=%d.",
-                     symbol, actual_dir, actual_count, (mixed ? "true" : "false"), symbol_active_orders);
+         PrintFormat(
+            "Entry verification is pending on %s after dispatch; current "
+            + "state dir=%d count=%d mixed=%s active=%d.",
+            symbol,
+            actual_dir,
+            actual_count,
+            (mixed ? "true" : "false"),
+            symbol_active_orders
+         );
          RecordBacktestEntryTime(SafeNow());
          return true;
       }
@@ -136,7 +151,14 @@ bool BuildTradePlan(const int symbol_idx,
       double sizing_score = 0.0;
       double vol_mult = 1.0;
       double cov_mult = 1.0;
-      double target_risk_pct = ModernTargetRiskPct(symbol_idx, dir, atr_pct, sizing_score, vol_mult, cov_mult);
+      double target_risk_pct = ModernTargetRiskPct(
+         symbol_idx,
+         dir,
+         atr_pct,
+         sizing_score,
+         vol_mult,
+         cov_mult
+      );
       double target_risk_cash = equity * target_risk_pct / 100.0;
       if(target_risk_cash <= EPS())
       {
@@ -185,7 +207,10 @@ bool BuildTradePlan(const int symbol_idx,
       reason = "currency conversion unavailable for EUR exposure normalization";
       return false;
    }
-   double exposure_room_eur = equity_eur * InpMaxPortfolioExposurePct / 100.0 - snapshot.open_exposure_eur;
+   double exposure_room_eur = (
+      equity_eur * InpMaxPortfolioExposurePct / 100.0
+      - snapshot.open_exposure_eur
+   );
    if(exposure_room_eur <= EPS())
    {
       reason = "exposure cap reached";
@@ -201,7 +226,10 @@ bool BuildTradePlan(const int symbol_idx,
    }
    if(margin_per_lot > EPS())
    {
-      double margin_room_cash = equity * InpMaxMarginUsagePct / 100.0 - snapshot.current_margin_cash;
+      double margin_room_cash = (
+         equity * InpMaxMarginUsagePct / 100.0
+         - snapshot.current_margin_cash
+      );
       if(margin_room_cash <= EPS())
       {
          reason = "margin usage cap reached";
@@ -982,15 +1010,78 @@ int CollectManagedTickets(const string symbol, ulong &tickets[])
    return ArraySize(tickets);
 }
 
-// Refreshes execution snapshot.
-void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
+// Resets the tracked per-symbol execution state for the current cycle.
+void ResetTrackedExecutionState()
 {
-   ResetExecutionSnapshot(snapshot);
-   snapshot.current_margin_cash = AccountInfoDouble(ACCOUNT_MARGIN);
-
    for(int i=0; i<g_num_symbols; ++i)
       ResetSymbolExecutionState(g_exec_symbol_state[i]);
+}
 
+// Marks the snapshot as having unprotected or unmeasurable risk.
+void MarkSnapshotRiskUnknown(FXRCExecutionSnapshot &snapshot)
+{
+   snapshot.all_protected = false;
+   snapshot.open_risk_cash = DBL_MAX / 4.0;
+}
+
+// Adds tracked position exposure and risk to the current snapshot.
+void AccumulateTrackedPositionSnapshot(const string symbol,
+                                       const long position_type,
+                                       const double volume,
+                                       const double stop_price,
+                                       FXRCExecutionSnapshot &snapshot)
+{
+   int dir = PositionDirFromType(position_type);
+   AccumulateTrackedPositionState(symbol, dir, volume);
+
+   double notional_eur = 0.0;
+   if(EstimateNotionalEUR(symbol, volume, notional_eur))
+      snapshot.open_exposure_eur += MathAbs(notional_eur);
+
+   if(stop_price <= 0.0)
+   {
+      MarkSnapshotRiskUnknown(snapshot);
+      return;
+   }
+
+   MqlTick tick;
+   double mid = 0.0;
+   if(!GetMidPrice(symbol, tick, mid))
+   {
+      MarkSnapshotRiskUnknown(snapshot);
+      return;
+   }
+
+   double current_price = (
+      position_type == POSITION_TYPE_BUY
+      ? tick.bid
+      : tick.ask
+   );
+   double risk_cash = 0.0;
+   ENUM_ORDER_TYPE order_type = (
+      position_type == POSITION_TYPE_BUY
+      ? ORDER_TYPE_BUY
+      : ORDER_TYPE_SELL
+   );
+   if(!OrderCalcProfit(
+      order_type,
+      symbol,
+      volume,
+      current_price,
+      stop_price,
+      risk_cash))
+   {
+      MarkSnapshotRiskUnknown(snapshot);
+      return;
+   }
+
+   if(risk_cash < 0.0)
+      snapshot.open_risk_cash += -risk_cash;
+}
+
+// Scans account positions into the execution snapshot.
+void RefreshPositionExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
+{
    for(int i=PositionsTotal()-1; i>=0; --i)
    {
       ulong ticket = PositionGetTicket(i);
@@ -998,7 +1089,6 @@ void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
          continue;
 
       snapshot.account_active_orders++;
-
       if(!IsSelectedFXRCPosition())
          continue;
 
@@ -1006,46 +1096,19 @@ void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
       if(!IsForexPositionSymbol(symbol))
          continue;
 
-      long type = PositionGetInteger(POSITION_TYPE);
-      int dir = PositionDirFromType(type);
-      double volume = PositionGetDouble(POSITION_VOLUME);
-      AccumulateTrackedPositionState(symbol, dir, volume);
-
-      double notional_eur = 0.0;
-      if(EstimateNotionalEUR(symbol, volume, notional_eur))
-         snapshot.open_exposure_eur += MathAbs(notional_eur);
-
-      double sl = PositionGetDouble(POSITION_SL);
-      if(sl <= 0.0)
-      {
-         snapshot.all_protected = false;
-         snapshot.open_risk_cash = DBL_MAX / 4.0;
-         continue;
-      }
-
-      MqlTick tick;
-      double mid;
-      if(!GetMidPrice(symbol, tick, mid))
-      {
-         snapshot.all_protected = false;
-         snapshot.open_risk_cash = DBL_MAX / 4.0;
-         continue;
-      }
-
-      double current_price = (type == POSITION_TYPE_BUY ? tick.bid : tick.ask);
-      double risk_cash = 0.0;
-      ENUM_ORDER_TYPE order_type = (type == POSITION_TYPE_BUY ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
-      if(!OrderCalcProfit(order_type, symbol, volume, current_price, sl, risk_cash))
-      {
-         snapshot.all_protected = false;
-         snapshot.open_risk_cash = DBL_MAX / 4.0;
-         continue;
-      }
-
-      if(risk_cash < 0.0)
-         snapshot.open_risk_cash += -risk_cash;
+      AccumulateTrackedPositionSnapshot(
+         symbol,
+         PositionGetInteger(POSITION_TYPE),
+         PositionGetDouble(POSITION_VOLUME),
+         PositionGetDouble(POSITION_SL),
+         snapshot
+      );
    }
+}
 
+// Scans account pending orders into the execution snapshot.
+void RefreshOrderExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
+{
    for(int i=OrdersTotal()-1; i>=0; --i)
    {
       ulong ticket = OrderGetTicket(i);
@@ -1053,7 +1116,6 @@ void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
          continue;
 
       snapshot.account_active_orders++;
-
       if(!IsSelectedFXRCOrder())
          continue;
 
@@ -1063,6 +1125,17 @@ void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
 
       AccumulateTrackedOrderState(symbol);
    }
+}
+
+// Refreshes execution snapshot.
+void RefreshExecutionSnapshot(FXRCExecutionSnapshot &snapshot)
+{
+   ResetExecutionSnapshot(snapshot);
+   snapshot.current_margin_cash = AccountInfoDouble(ACCOUNT_MARGIN);
+   ResetTrackedExecutionState();
+
+   RefreshPositionExecutionSnapshot(snapshot);
+   RefreshOrderExecutionSnapshot(snapshot);
 }
 
 // Accumulates tracked order state.
