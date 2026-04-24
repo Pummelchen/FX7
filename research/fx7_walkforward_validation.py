@@ -359,6 +359,10 @@ def main() -> None:
     summary = _metrics(y, p, args.edge_threshold)
     summary.update(_bootstrap_ci(y, p, args.seed))
     _add_cost_and_turnover_proxies(oos, summary, label_col)
+    if f"future_return_{args.horizon_days}d" in oos.columns:
+        ret = pd.to_numeric(oos[f"future_return_{args.horizon_days}d"], errors="coerce")
+        summary["information_coefficient"] = float(pd.Series(p).corr(ret, method="spearman"))
+
     summary["model"] = "fx7_logistic"
     summary_rows = [summary]
     for col in [c for c in oos.columns if c.startswith("p_") and c != "p_up"]:
@@ -368,10 +372,6 @@ def main() -> None:
     pd.DataFrame(summary_rows).to_csv(output_dir / "metrics_summary.csv", index=False)
     pd.DataFrame(fold_rows).to_csv(output_dir / "fold_metrics.csv", index=False)
     _calibration_table(y, p).to_csv(output_dir / "calibration_table.csv", index=False)
-
-    if f"future_return_{args.horizon_days}d" in oos.columns:
-        ret = pd.to_numeric(oos[f"future_return_{args.horizon_days}d"], errors="coerce")
-        summary["information_coefficient"] = float(pd.Series(p).corr(ret, method="spearman"))
 
     final_coef, final_intercept = _write_final_model(
         frame,

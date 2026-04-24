@@ -137,8 +137,8 @@ void BuildCorrelationMatrices()
    }
 }
 
-// Updates panic gate and scores.
-void UpdatePanicGateAndScores()
+// Computes universe-level panic context from closed-bar standardized returns.
+void ComputeUniversePanicContext(double &zu5, double &vu)
 {
    BuildUniverseStdRet();
 
@@ -146,11 +146,46 @@ void UpdatePanicGateAndScores()
    int zu_count = MathMin(5, g_ret_hist_len);
    for(int k=0; k<zu_count; ++k)
       zu5_sum += g_universe_stdret_hist[k];
-   double Zu5 = zu5_sum / MathSqrt((double)MathMax(zu_count, 1));
+   zu5 = zu5_sum / MathSqrt((double)MathMax(zu_count, 1));
 
    double su = EWMAStdFromSeriesNewestFirst(g_universe_stdret_hist, MathMin(20, g_ret_hist_len), 20);
    double lu = EWMAStdFromSeriesNewestFirst(g_universe_stdret_hist, MathMin(100, g_ret_hist_len), 100);
-   double Vu = su / (lu + EPS());
+   vu = su / (lu + EPS());
+}
+
+// Updates only the panic gate without mutating smoothed scores or persistence.
+void UpdatePanicGateOnly()
+{
+   double zu5 = 0.0;
+   double vu = 0.0;
+   ComputeUniversePanicContext(zu5, vu);
+
+   for(int i=0; i<g_num_symbols; ++i)
+   {
+      if(!g_symbol_data_ok[i] || IsSymbolDataStale(i))
+      {
+         g_PG[i] = 1.0;
+         continue;
+      }
+
+      int alpha_dir = SignD(g_CompositeCore[i]);
+      if(alpha_dir == 0)
+         alpha_dir = SignD(g_M[i]);
+
+      g_PG[i] = MathExp(
+         -InpGammaP
+         * PosPart(vu - InpVPanic)
+         * PosPart(-(double)alpha_dir * zu5)
+      );
+   }
+}
+
+// Updates panic gate, smoothed scores, confidence, thresholds, and persistence.
+void UpdatePanicGateAndScores()
+{
+   double zu5 = 0.0;
+   double vu = 0.0;
+   ComputeUniversePanicContext(zu5, vu);
 
    for(int i=0; i<g_num_symbols; ++i)
    {
@@ -181,7 +216,11 @@ void UpdatePanicGateAndScores()
       int alpha_dir = SignD(g_CompositeCore[i]);
       if(alpha_dir == 0)
          alpha_dir = SignD(g_M[i]);
-      g_PG[i] = MathExp(-InpGammaP * PosPart(Vu - InpVPanic) * PosPart(-(double)alpha_dir * Zu5));
+      g_PG[i] = MathExp(
+         -InpGammaP
+         * PosPart(vu - InpVPanic)
+         * PosPart(-(double)alpha_dir * zu5)
+      );
       // Regime/cost remain hard gates below; keep the score focused on directional conviction.
       g_E[i] = BuildSignalCoreScore(i);
       if(bar_advanced || g_last_processed_signal_bar[i] == 0)
@@ -380,6 +419,11 @@ bool BuildCandidateRecord(const int idx, FXRCCandidate &candidate)
          : 1.0 - g_probability_p_up[idx]
       );
       candidate.confidence = Clip(directional_probability, 0.0, 1.0);
+      candidate.priority = BuildCandidatePriorityWithConfidence(
+         idx,
+         candidate.dir,
+         candidate.confidence
+      );
    }
 
    if(!FXRCApplyMetaAllocationToCandidate(candidate))
@@ -391,8 +435,23 @@ bool BuildCandidateRecord(const int idx, FXRCCandidate &candidate)
 // Builds candidate priority.
 double BuildCandidatePriority(const int idx, const int dir = 0)
 {
-   double base_rank = MathMax(g_Rank[idx], MathAbs(g_S[idx]) * g_Conf[idx]);
-   double gate_weight = 0.50 + 0.25 * Clip(g_G[idx], 0.0, 1.0) + 0.25 * Clip(DirectionalExecGate(idx, dir), 0.0, 1.0);
+   return BuildCandidatePriorityWithConfidence(idx, dir, g_Conf[idx]);
+}
+
+// Builds candidate priority using an explicit confidence value.
+double BuildCandidatePriorityWithConfidence(const int idx,
+                                            const int dir,
+                                            const double confidence)
+{
+   double clipped_confidence = Clip(confidence, 0.0, 1.0);
+   double raw_rank = MathAbs(g_S[idx]) * clipped_confidence;
+   double novelty_weight = InpNoveltyFloorWeight
+                         + (1.0 - InpNoveltyFloorWeight) * g_Omega[idx];
+   double novelty_rank = raw_rank * MathMax(novelty_weight, 0.0);
+   double base_rank = MathMax(raw_rank, novelty_rank);
+   double gate_weight = 0.50
+                      + 0.25 * Clip(g_G[idx], 0.0, 1.0)
+                      + 0.25 * Clip(DirectionalExecGate(idx, dir), 0.0, 1.0);
    double momentum_weight = 0.60 + 0.40 * MathMin(MathAbs(g_M[idx]), 1.0);
    return base_rank * gate_weight * momentum_weight;
 }

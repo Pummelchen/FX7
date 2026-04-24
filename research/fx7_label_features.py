@@ -97,29 +97,47 @@ def label_features(
     """Attach close-aligned future-return labels without using future features."""
 
     labeled_prices = _add_forward_returns(ohlc)
-    joined = pd.merge_asof(
-        features.sort_values("timestamp_bar"),
-        labeled_prices.sort_values("ohlc_timestamp"),
-        left_on="timestamp_bar",
-        right_on="ohlc_timestamp",
-        by="symbol_norm",
-        direction="backward",
-        allow_exact_matches=True,
-    )
+    joined_parts: list[pd.DataFrame] = []
+    for symbol, feature_group in features.groupby("symbol_norm", sort=False):
+        price_group = labeled_prices[labeled_prices["symbol_norm"] == symbol]
+        if price_group.empty:
+            continue
+
+        joined_parts.append(
+            pd.merge_asof(
+                feature_group.sort_values("timestamp_bar"),
+                price_group.sort_values("ohlc_timestamp"),
+                left_on="timestamp_bar",
+                right_on="ohlc_timestamp",
+                direction="backward",
+                allow_exact_matches=True,
+            )
+        )
+
+    if not joined_parts:
+        raise ValueError("No feature rows matched the supplied OHLC symbols.")
+
+    joined = pd.concat(joined_parts, ignore_index=True)
 
     for horizon in (1, 5):
         ret_col = f"future_return_{horizon}d"
         label_col = f"label_up_{horizon}d"
         neutral_col = f"label_neutral_{horizon}d"
-        joined[label_col] = np.where(joined[ret_col] > 0.0, 1, 0)
+        has_label = joined[ret_col].notna()
+        joined[label_col] = np.where(has_label, np.where(joined[ret_col] > 0.0, 1, 0), np.nan)
         joined[neutral_col] = 0
         if neutral_theta > 0.0 and "realized_vol" in joined.columns:
             vol = pd.to_numeric(joined["realized_vol"], errors="coerce").fillna(0.0)
-            neutral = joined[ret_col].abs() <= neutral_theta * vol
+            neutral = has_label & (joined[ret_col].abs() <= neutral_theta * vol)
             joined.loc[neutral, neutral_col] = 1
             joined.loc[neutral, label_col] = -1
 
-    return joined.drop(columns=["symbol_y"], errors="ignore").rename(columns={"symbol_x": "symbol"})
+    return (
+        joined.drop(columns=["symbol_y", "symbol_norm_y"], errors="ignore")
+        .rename(columns={"symbol_x": "symbol", "symbol_norm_x": "symbol_norm"})
+        .sort_values(["symbol_norm", "timestamp_bar"])
+        .reset_index(drop=True)
+    )
 
 
 def main() -> None:

@@ -999,13 +999,13 @@ void ExecuteModel(const bool allow_new_entries = true)
    if(g_conversion_error_active || !any_ok)
       return;
 
-   UpdatePanicGateAndScores();
    if(InpUseRegimeStateFilter)
    {
+      UpdatePanicGateOnly();
       FXRCRefreshRegimeStateForCycle();
       FXRCRebuildCompositePremiaAlphaForCycle();
-      UpdatePanicGateAndScores();
    }
+   UpdatePanicGateAndScores();
 
    BuildCorrelationMatrices();
    EnsureProtectiveStops();

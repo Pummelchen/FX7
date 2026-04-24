@@ -1566,13 +1566,17 @@ bool IsTradeRetcodeSuccessForAction(const ENUM_TRADE_REQUEST_ACTIONS action,
    return (action == TRADE_ACTION_SLTP && retcode == TRADE_RETCODE_NO_CHANGES);
 }
 
-// Normalizes volume.
-double NormalizeVolume(const string symbol, const double requested)
+// Normalizes volume by broker step while optionally enforcing FX7's entry floor.
+double NormalizeVolume(const string symbol,
+                       const double requested,
+                       const bool enforce_project_min = true)
 {
    double minv = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
    double maxv = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MAX);
    double step = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
 
+   if(enforce_project_min)
+      minv = MathMax(minv, 0.01);
    if(step <= 0.0)
       step = minv;
    if(step <= 0.0)

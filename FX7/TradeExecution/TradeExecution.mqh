@@ -314,10 +314,10 @@ bool BuildTradePlan(const int symbol_idx,
    }
 
    double normalized = NormalizeVolume(symbol, cap_volume);
-   double minv = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
+   double minv = MathMax(SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN), 0.01);
    if(normalized < minv - EPS())
    {
-      reason = "normalized volume below broker minimum";
+      reason = "normalized volume below broker/project minimum";
       return false;
    }
 
@@ -593,7 +593,7 @@ bool CloseManagedPositionTicket(const ulong ticket, const string reason)
    request.action = TRADE_ACTION_DEAL;
    request.symbol = symbol;
    request.position = ticket;
-   request.volume = NormalizeVolume(symbol, volume);
+   request.volume = NormalizeVolume(symbol, volume, false);
    request.type = close_type;
    request.magic = InpMagicNumber;
    request.deviation = InpSlippagePoints;
