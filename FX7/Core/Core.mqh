@@ -830,6 +830,17 @@ bool ValidatePremiaInputs()
       return FailInputValidation("Premia weights must be >= 0.");
    if((InpWeightMomentum + InpWeightCarry + InpWeightValue) <= EPS())
       return FailInputValidation("At least one premia weight must be > 0.");
+   if(InpCarryModel != FXRC_CARRY_MODEL_BROKER_SWAP
+      && InpCarryModel != FXRC_CARRY_MODEL_RATE_DIFF)
+   {
+      return FailInputValidation("InpCarryModel is invalid.");
+   }
+   if(InpValueModel != FXRC_VALUE_MODEL_PROXY
+      && InpValueModel != FXRC_VALUE_MODEL_PPP
+      && InpValueModel != FXRC_VALUE_MODEL_HYBRID)
+   {
+      return FailInputValidation("InpValueModel is invalid.");
+   }
    if(InpCarryMaxDataAgeDays <= 0 || InpCarryReloadHours <= 0)
       return FailInputValidation("Carry cache freshness inputs must be > 0.");
    if(InpValueLookbackBars < 30
@@ -1389,8 +1400,17 @@ bool IsTradeRetcodeSuccess(const uint retcode)
 {
    return (retcode == TRADE_RETCODE_DONE
         || retcode == TRADE_RETCODE_DONE_PARTIAL
-        || retcode == TRADE_RETCODE_PLACED
-        || retcode == TRADE_RETCODE_NO_CHANGES);
+        || retcode == TRADE_RETCODE_PLACED);
+}
+
+// Returns whether the retcode is successful for the requested trade action.
+bool IsTradeRetcodeSuccessForAction(const ENUM_TRADE_REQUEST_ACTIONS action,
+                                    const uint retcode)
+{
+   if(IsTradeRetcodeSuccess(retcode))
+      return true;
+
+   return (action == TRADE_ACTION_SLTP && retcode == TRADE_RETCODE_NO_CHANGES);
 }
 
 // Normalizes volume.
@@ -1440,6 +1460,15 @@ double NormalizePrice(const string symbol, const double price)
 void LogDependencyTransition(const string message)
 {
    PrintFormat("FXRC dependency: %s", message);
+}
+
+// Returns a readable dependency scope label for logs.
+string DependencyScopeLabel()
+{
+   if(StringLen(g_dependency_state.dependency_scope) > 0)
+      return g_dependency_state.dependency_scope;
+
+   return "dependency";
 }
 
 // Logs runtime state if needed.

@@ -499,13 +499,18 @@ bool BuildCarryCurrencySeriesFromCalendar(const string currency,
    int count = CalendarValueHistoryByEvent(event.id, values, BuildMacroHistoryStartTime(120), 0);
    if(count <= 0)
    {
-      reason = StringFormat("calendar carry history unavailable for %s via %s err=%d", currency, event.event_code, GetLastError());
+      reason = StringFormat(
+         "calendar carry history unavailable for %s via %s err=%d",
+         currency,
+         event.event_code,
+         GetLastError()
+      );
       return false;
    }
 
-   datetime obs_months[];
+   datetime obs_times[];
    double monthly_rates[];
-   ArrayResize(obs_months, 0);
+   ArrayResize(obs_times, 0);
    ArrayResize(monthly_rates, 0);
 
    for(int i=0; i<count; ++i)
@@ -522,18 +527,31 @@ bool BuildCarryCurrencySeriesFromCalendar(const string currency,
       if(record_time <= 0)
          continue;
 
-      UpsertMonthlyObservation(obs_months, monthly_rates, MacroMonthStart(record_time), normalized_rate);
+      UpsertMonthlyReleaseObservation(obs_times, monthly_rates, record_time, normalized_rate);
    }
 
-   if(ArraySize(obs_months) <= 0)
+   if(ArraySize(obs_times) <= 0)
    {
-      reason = StringFormat("calendar carry history has no usable actual values for %s via %s", currency, event.event_code);
+      reason = StringFormat(
+         "calendar carry history has no usable actual values for %s via %s",
+         currency,
+         event.event_code
+      );
       return false;
    }
 
-   SortMonthlyObservations(obs_months, monthly_rates);
-   if(!AppendCarrySeriesFromRateObservations(currency, obs_months, monthly_rates, temp_ccy, temp_dates, temp_rates, reason))
+   SortMacroObservations(obs_times, monthly_rates);
+   if(!AppendCarrySeriesFromRateObservations(
+      currency,
+      obs_times,
+      monthly_rates,
+      temp_ccy,
+      temp_dates,
+      temp_rates,
+      reason))
+   {
       return false;
+   }
 
    return true;
 }
@@ -555,13 +573,18 @@ bool BuildPPPCurrencySeriesFromCalendar(const string currency,
    int count = CalendarValueHistoryByEvent(event.id, values, BuildMacroHistoryStartTime(120), 0);
    if(count <= 0)
    {
-      reason = StringFormat("calendar PPP history unavailable for %s via %s err=%d", currency, event.event_code, GetLastError());
+      reason = StringFormat(
+         "calendar PPP history unavailable for %s via %s err=%d",
+         currency,
+         event.event_code,
+         GetLastError()
+      );
       return false;
    }
 
-   datetime obs_months[];
+   datetime obs_times[];
    double annual_rates[];
-   ArrayResize(obs_months, 0);
+   ArrayResize(obs_times, 0);
    ArrayResize(annual_rates, 0);
 
    for(int i=0; i<count; ++i)
@@ -576,18 +599,27 @@ bool BuildPPPCurrencySeriesFromCalendar(const string currency,
       if(record_time <= 0)
          continue;
 
-      UpsertMonthlyObservation(obs_months, annual_rates, MacroMonthStart(record_time), actual);
+      UpsertMonthlyReleaseObservation(obs_times, annual_rates, record_time, actual);
    }
 
-   if(ArraySize(obs_months) < 2)
+   if(ArraySize(obs_times) < 2)
    {
       reason = StringFormat("calendar PPP history is insufficient for %s via %s", currency, event.event_code);
       return false;
    }
 
-   SortMonthlyObservations(obs_months, annual_rates);
-   if(!AppendPPPSeriesFromInflationRates(currency, obs_months, annual_rates, temp_ccy, temp_dates, temp_cpi, reason))
+   SortMacroObservations(obs_times, annual_rates);
+   if(!AppendPPPSeriesFromInflationRates(
+      currency,
+      obs_times,
+      annual_rates,
+      temp_ccy,
+      temp_dates,
+      temp_cpi,
+      reason))
+   {
       return false;
+   }
 
    return true;
 }
@@ -728,7 +760,9 @@ int ScorePPPCalendarEvent(const string currency, const MqlCalendarEvent &event)
       score += 72;
    else if(StringFind(code, "cpi") >= 0 && StringFind(code, "yy") >= 0 && StringFind(code, "core") < 0)
       score += 68;
-   else if(StringFind(code, "core-cpi") >= 0 || StringFind(code, "core-hicp") >= 0 || StringFind(code, "core-pce-price-index-yy") >= 0)
+   else if(StringFind(code, "core-cpi") >= 0
+           || StringFind(code, "core-hicp") >= 0
+           || StringFind(code, "core-pce-price-index-yy") >= 0)
       score += 55;
    else
       return -1;
@@ -884,43 +918,51 @@ void AppendMacroRecord(string &ccy[],
    values[new_size - 1] = record_value;
 }
 
-// Upserts monthly observation.
-void UpsertMonthlyObservation(datetime &months[], double &values[], const datetime month_start, const double value)
+// Upserts the latest released observation for a calendar month.
+void UpsertMonthlyReleaseObservation(datetime &release_times[],
+                                     double &values[],
+                                     const datetime release_time,
+                                     const double value)
 {
-   for(int i=0; i<ArraySize(months); ++i)
+   datetime release_month = MacroMonthStart(release_time);
+   for(int i=0; i<ArraySize(release_times); ++i)
    {
-      if(months[i] == month_start)
+      if(MacroMonthStart(release_times[i]) == release_month)
       {
-         values[i] = value;
+         if(release_time >= release_times[i])
+         {
+            release_times[i] = release_time;
+            values[i] = value;
+         }
          return;
       }
    }
 
-   int new_size = ArraySize(months) + 1;
-   ArrayResize(months, new_size);
+   int new_size = ArraySize(release_times) + 1;
+   ArrayResize(release_times, new_size);
    ArrayResize(values, new_size);
-   months[new_size - 1] = month_start;
+   release_times[new_size - 1] = release_time;
    values[new_size - 1] = value;
 }
 
-// Sorts monthly observations.
-void SortMonthlyObservations(datetime &months[], double &values[])
+// Sorts macro observations by their availability timestamp.
+void SortMacroObservations(datetime &release_times[], double &values[])
 {
-   int n = ArraySize(months);
+   int n = ArraySize(release_times);
    for(int i=0; i<n-1; ++i)
    {
       int best = i;
       for(int j=i+1; j<n; ++j)
       {
-         if(months[j] < months[best])
+         if(release_times[j] < release_times[best])
             best = j;
       }
 
       if(best != i)
       {
-         datetime month_tmp = months[i];
-         months[i] = months[best];
-         months[best] = month_tmp;
+         datetime time_tmp = release_times[i];
+         release_times[i] = release_times[best];
+         release_times[best] = time_tmp;
 
          double value_tmp = values[i];
          values[i] = values[best];
@@ -931,7 +973,7 @@ void SortMonthlyObservations(datetime &months[], double &values[])
 
 // Appends carry series from rate observations.
 bool AppendCarrySeriesFromRateObservations(const string currency,
-                                           const datetime &months[],
+                                           const datetime &release_times[],
                                            const double &monthly_rates[],
                                            string &temp_ccy[],
                                            datetime &temp_dates[],
@@ -939,7 +981,7 @@ bool AppendCarrySeriesFromRateObservations(const string currency,
                                            string &reason)
 {
    reason = "";
-   int total = ArraySize(months);
+   int total = ArraySize(release_times);
    if(total <= 0)
    {
       reason = StringFormat("no carry observations are available for %s", currency);
@@ -950,15 +992,15 @@ bool AppendCarrySeriesFromRateObservations(const string currency,
    if(stop <= 0)
       stop = MacroMonthStart(TimeCurrent());
    if(stop <= 0)
-      stop = months[total - 1];
+      stop = release_times[total - 1];
 
-   datetime cursor = months[0];
+   datetime cursor = release_times[0];
    double active_rate = monthly_rates[0];
    AppendMacroRecord(temp_ccy, temp_dates, temp_rates, currency, cursor, active_rate);
 
    for(int i=1; i<total; ++i)
    {
-      datetime target = months[i];
+      datetime target = release_times[i];
       datetime next_month = AddMonthsToDate(cursor, 1);
       while(next_month < target)
       {
@@ -985,7 +1027,7 @@ bool AppendCarrySeriesFromRateObservations(const string currency,
 
 // Appends PPP series from inflation rates.
 bool AppendPPPSeriesFromInflationRates(const string currency,
-                                       const datetime &months[],
+                                       const datetime &release_times[],
                                        const double &annual_rates[],
                                        string &temp_ccy[],
                                        datetime &temp_dates[],
@@ -993,7 +1035,7 @@ bool AppendPPPSeriesFromInflationRates(const string currency,
                                        string &reason)
 {
    reason = "";
-   int total = ArraySize(months);
+   int total = ArraySize(release_times);
    if(total <= 0)
    {
       reason = StringFormat("no PPP inflation observations are available for %s", currency);
@@ -1001,26 +1043,31 @@ bool AppendPPPSeriesFromInflationRates(const string currency,
    }
 
    double index_value = 100.0;
-   datetime cursor = months[0];
+   datetime cursor = release_times[0];
    AppendMacroRecord(temp_ccy, temp_dates, temp_cpi, currency, cursor, index_value);
 
    double active_annual_rate = annual_rates[0];
    for(int i=1; i<total; ++i)
    {
-      datetime target = months[i];
-      while(cursor < target)
+      datetime target = release_times[i];
+      if(target <= cursor)
       {
-         cursor = AddMonthsToDate(cursor, 1);
-         // Apply the newly observed month's inflation rate to that month instead of
-         // lagging the update by one full step, which would shift the rebuilt CPI
-         // path away from the explicit level history the old CSVs represented.
-         double step_annual_rate = active_annual_rate;
-         if(cursor >= target)
-            step_annual_rate = annual_rates[i];
-
-         index_value *= AnnualRateToMonthlyFactor(step_annual_rate);
-         AppendMacroRecord(temp_ccy, temp_dates, temp_cpi, currency, cursor, index_value);
+         active_annual_rate = annual_rates[i];
+         continue;
       }
+
+      datetime next_month = AddMonthsToDate(cursor, 1);
+      while(next_month < target)
+      {
+         cursor = next_month;
+         index_value *= AnnualRateToMonthlyFactor(active_annual_rate);
+         AppendMacroRecord(temp_ccy, temp_dates, temp_cpi, currency, cursor, index_value);
+         next_month = AddMonthsToDate(cursor, 1);
+      }
+
+      cursor = target;
+      index_value *= AnnualRateToMonthlyFactor(annual_rates[i]);
+      AppendMacroRecord(temp_ccy, temp_dates, temp_cpi, currency, cursor, index_value);
       active_annual_rate = annual_rates[i];
    }
 
@@ -1384,7 +1431,10 @@ bool GetPPPFirstRecordDate(const string currency, datetime &record_date)
 }
 
 // Gets the carry record at or before the requested time.
-bool GetCarryRecordAtOrBefore(const string currency, const datetime asof_time, double &rate_value, datetime &record_date)
+bool GetCarryRecordAtOrBefore(const string currency,
+                              const datetime asof_time,
+                              double &rate_value,
+                              datetime &record_date)
 {
    rate_value = 0.0;
    record_date = 0;

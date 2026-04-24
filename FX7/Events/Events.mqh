@@ -513,7 +513,12 @@ void FX7HandleTick()
          bool post_must_flatten = false;
          bool post_disable_after_flatten = false;
          string post_reason = dependency_reason;
-         RefreshDependencyRuntimeState(post_entries_allowed, post_must_flatten, post_disable_after_flatten, post_reason);
+         RefreshDependencyRuntimeState(
+            post_entries_allowed,
+            post_must_flatten,
+            post_disable_after_flatten,
+            post_reason
+         );
          if(post_disable_after_flatten)
          {
             ExpertRemove();
@@ -1181,7 +1186,10 @@ bool RefreshRuntimeState(const bool force_log)
 }
 
 // Refreshes dependency runtime state.
-bool RefreshDependencyRuntimeState(bool &entries_allowed, bool &must_flatten, bool &disable_after_flatten, string &reason)
+bool RefreshDependencyRuntimeState(bool &entries_allowed,
+                                   bool &must_flatten,
+                                   bool &disable_after_flatten,
+                                   string &reason)
 {
    entries_allowed = true;
    must_flatten = false;
@@ -1223,12 +1231,19 @@ bool RefreshDependencyRuntimeState(bool &entries_allowed, bool &must_flatten, bo
 
          entries_allowed = !InpFreezeEntriesOnDependencyFailure;
          reason = dependency_reason;
-         LogDependencyTransition(StringFormat("%s became unavailable. state=%s policy=%s reason=%s grace=%d minutes",
-                                             dependency_scope,
-                                             DependencyStateToString(g_dependency_state.status),
-                                             (InpFreezeEntriesOnDependencyFailure ? "freeze_entries" : "continue_on_stale_inputs"),
-                                             dependency_reason,
-                                             InpDependencyFailureGraceMinutes));
+         string policy = (
+            InpFreezeEntriesOnDependencyFailure
+            ? "freeze_entries"
+            : "continue_on_stale_inputs"
+         );
+         LogDependencyTransition(StringFormat(
+            "%s became unavailable. state=%s policy=%s reason=%s grace=%d minutes",
+            dependency_scope,
+            DependencyStateToString(g_dependency_state.status),
+            policy,
+            dependency_reason,
+            InpDependencyFailureGraceMinutes
+         ));
          return true;
       }
 
@@ -1246,9 +1261,11 @@ bool RefreshDependencyRuntimeState(bool &entries_allowed, bool &must_flatten, bo
          g_dependency_state.status = FXRC_DEPENDENCY_HEALTHY;
          g_dependency_state.failure_active = false;
          g_dependency_state.last_success_time = now;
-         LogDependencyTransition(StringFormat("%s recovered before grace expiry. state=%s",
-                                             (StringLen(g_dependency_state.dependency_scope) > 0 ? g_dependency_state.dependency_scope : "dependency"),
-                                             DependencyStateToString(g_dependency_state.status)));
+         LogDependencyTransition(StringFormat(
+            "%s recovered before grace expiry. state=%s",
+            DependencyScopeLabel(),
+            DependencyStateToString(g_dependency_state.status)
+         ));
          g_dependency_state.failure_reason = "";
          g_dependency_state.dependency_scope = "";
          g_dependency_state.first_failure_time = 0;
@@ -1266,11 +1283,13 @@ bool RefreshDependencyRuntimeState(bool &entries_allowed, bool &must_flatten, bo
             g_dependency_state.status = FXRC_DEPENDENCY_SHUTDOWN_PENDING;
             reason = g_dependency_state.failure_reason;
             must_flatten = true;
-            LogDependencyTransition(StringFormat("%s remained unavailable past grace period. state=%s elapsed=%d seconds reason=%s",
-                                                (StringLen(g_dependency_state.dependency_scope) > 0 ? g_dependency_state.dependency_scope : "dependency"),
-                                                DependencyStateToString(g_dependency_state.status),
-                                                (int)MathMax(0, now - g_dependency_state.first_failure_time),
-                                                g_dependency_state.failure_reason));
+            LogDependencyTransition(StringFormat(
+               "%s remained unavailable past grace period. state=%s elapsed=%d seconds reason=%s",
+               DependencyScopeLabel(),
+               DependencyStateToString(g_dependency_state.status),
+               (int)MathMax(0, now - g_dependency_state.first_failure_time),
+               g_dependency_state.failure_reason
+            ));
          }
       }
 
@@ -1293,9 +1312,11 @@ bool RefreshDependencyRuntimeState(bool &entries_allowed, bool &must_flatten, bo
          g_dependency_state.status = FXRC_DEPENDENCY_DISABLED;
          g_dependency_state.failure_active = false;
          disable_after_flatten = true;
-         LogDependencyTransition(StringFormat("%s emergency flatten completed. state=%s",
-                                             (StringLen(g_dependency_state.dependency_scope) > 0 ? g_dependency_state.dependency_scope : "dependency"),
-                                             DependencyStateToString(g_dependency_state.status)));
+         LogDependencyTransition(StringFormat(
+            "%s emergency flatten completed. state=%s",
+            DependencyScopeLabel(),
+            DependencyStateToString(g_dependency_state.status)
+         ));
          return true;
       }
 
@@ -1304,9 +1325,11 @@ bool RefreshDependencyRuntimeState(bool &entries_allowed, bool &must_flatten, bo
          g_dependency_state.status = FXRC_DEPENDENCY_HEALTHY;
          g_dependency_state.failure_active = false;
          g_dependency_state.last_success_time = now;
-         LogDependencyTransition(StringFormat("%s recovered after emergency flatten. state=%s",
-                                             (StringLen(g_dependency_state.dependency_scope) > 0 ? g_dependency_state.dependency_scope : "dependency"),
-                                             DependencyStateToString(g_dependency_state.status)));
+         LogDependencyTransition(StringFormat(
+            "%s recovered after emergency flatten. state=%s",
+            DependencyScopeLabel(),
+            DependencyStateToString(g_dependency_state.status)
+         ));
          g_dependency_state.failure_reason = "";
          g_dependency_state.dependency_scope = "";
          g_dependency_state.first_failure_time = 0;
@@ -1338,11 +1361,13 @@ bool HandleDependencyEmergencyFlatten(const string reason)
 
    if(!g_dependency_state.flatten_triggered)
    {
-      LogDependencyTransition(StringFormat("initiating emergency flatten. positions=%d pending=%d scope=%s reason=%s",
-                                          CountManagedOpenPositions(),
-                                          CountManagedPendingOrders(),
-                                          (StringLen(g_dependency_state.dependency_scope) > 0 ? g_dependency_state.dependency_scope : "dependency"),
-                                          (StringLen(reason) > 0 ? reason : g_dependency_state.failure_reason)));
+      LogDependencyTransition(StringFormat(
+         "initiating emergency flatten. positions=%d pending=%d scope=%s reason=%s",
+         CountManagedOpenPositions(),
+         CountManagedPendingOrders(),
+         DependencyScopeLabel(),
+         (StringLen(reason) > 0 ? reason : g_dependency_state.failure_reason)
+      ));
       g_dependency_state.flatten_triggered = true;
    }
 
@@ -1358,8 +1383,11 @@ bool HandleHardStopEmergencyShutdown(const string reason)
    {
       g_hard_stop_active = true;
       g_hard_stop_reason = reason;
-      PrintFormat("FXRC hard stop triggered: %s. Closing FXRC-owned positions and any unexpected pending orders before removing expert.",
-                  g_hard_stop_reason);
+      PrintFormat(
+         "FXRC hard stop triggered: %s. Closing FXRC-owned positions "
+         + "and any unexpected pending orders before removing expert.",
+         g_hard_stop_reason
+      );
    }
    else if(StringLen(g_hard_stop_reason) == 0 && StringLen(reason) > 0)
    {
@@ -1394,7 +1422,12 @@ bool HandleSessionProfitReset()
    if(session_gain_usd + EPS() < InpClassicSessionResetProfitUSD)
       return false;
 
-   PrintFormat("Session reset target reached: gain %.2f USD >= %.2f USD. Closing all managed positions and removing any unexpected pending orders.", session_gain_usd, InpClassicSessionResetProfitUSD);
+   PrintFormat(
+      "Session reset target reached: gain %.2f USD >= %.2f USD. "
+      + "Closing all managed positions and removing unexpected pending orders.",
+      session_gain_usd,
+      InpClassicSessionResetProfitUSD
+   );
 
    CloseAllManagedPositions("FXRC session reset");
    DeleteAllManagedPendingOrders("FXRC session reset");

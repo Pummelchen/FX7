@@ -43,7 +43,8 @@ FX7 can run with different dependency profiles:
 No external CSV files are used anymore. At startup the EA:
 
 - pulls economic-calendar history for the currencies used by `InpSymbols`
-- reshapes carry into a monthly forward-filled series and PPP into a monthly CPI-style index path
+- preserves calendar release timestamps so macro values are only available after publication
+- reshapes carry into a forward-filled series and PPP into a CPI-style index path
 - falls back to built-in major-currency profiles if calendar data is missing
 - keeps the existing dependency health checks, freeze/flatten policy, and freshness controls
 

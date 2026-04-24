@@ -292,7 +292,12 @@ bool ValidateTradePlan(const FXRCTradePlan &plan, string &reason)
 }
 
 // Calculates the modern target risk percentage for the candidate.
-double ModernTargetRiskPct(const int idx, const int dir, const double atr_pct, double &score_out, double &vol_mult_out, double &cov_mult_out)
+double ModernTargetRiskPct(const int idx,
+                           const int dir,
+                           const double atr_pct,
+                           double &score_out,
+                           double &vol_mult_out,
+                           double &cov_mult_out)
 {
    score_out = ModernSizingScore(idx, dir, atr_pct);
    vol_mult_out = ModernVolatilityMultiplier(atr_pct);
@@ -453,8 +458,12 @@ bool CloseManagedPositionsForSymbol(const string symbol, const string reason)
    if(VerifyManagedState(symbol, 0))
       return true;
 
-   PrintFormat("Close verification is pending on %s after %s. Further actions on the symbol will wait for trade-event confirmation.",
-               symbol, reason);
+   PrintFormat(
+      "Close verification is pending on %s after %s. "
+      + "Further actions on the symbol will wait for trade-event confirmation.",
+      symbol,
+      reason
+   );
    return false;
 }
 
@@ -526,7 +535,11 @@ bool CloseManagedPositionTicket(const ulong ticket, const string reason)
 }
 
 // Builds protective stop.
-bool BuildProtectiveStop(const string symbol, const int dir, const double atr_pct, double &entry_price, double &stop_price)
+bool BuildProtectiveStop(const string symbol,
+                         const int dir,
+                         const double atr_pct,
+                         double &entry_price,
+                         double &stop_price)
 {
    MqlTick tick;
    double mid;
@@ -539,14 +552,24 @@ bool BuildProtectiveStop(const string symbol, const int dir, const double atr_pc
       entry_price = tick.ask;
       stop_price = NormalizePrice(symbol, tick.bid - distance);
       if(stop_price >= tick.bid - MinStopDistancePrice(symbol))
-         stop_price = NormalizePrice(symbol, tick.bid - (MinStopDistancePrice(symbol) + SymbolInfoDouble(symbol, SYMBOL_POINT)));
+      {
+         stop_price = NormalizePrice(
+            symbol,
+            tick.bid - (MinStopDistancePrice(symbol) + SymbolInfoDouble(symbol, SYMBOL_POINT))
+         );
+      }
    }
    else
    {
       entry_price = tick.bid;
       stop_price = NormalizePrice(symbol, tick.ask + distance);
       if(stop_price <= tick.ask + MinStopDistancePrice(symbol))
-         stop_price = NormalizePrice(symbol, tick.ask + (MinStopDistancePrice(symbol) + SymbolInfoDouble(symbol, SYMBOL_POINT)));
+      {
+         stop_price = NormalizePrice(
+            symbol,
+            tick.ask + (MinStopDistancePrice(symbol) + SymbolInfoDouble(symbol, SYMBOL_POINT))
+         );
+      }
    }
 
    return (stop_price > 0.0);
@@ -563,7 +586,10 @@ double MinStopDistancePrice(const string symbol)
 }
 
 // Sends a trade request with retry and optional order-check handling.
-bool SendTradeRequestWithRetry(MqlTradeRequest &request, const string context, const bool use_check, MqlTradeResult &result)
+bool SendTradeRequestWithRetry(MqlTradeRequest &request,
+                               const string context,
+                               const bool use_check,
+                               MqlTradeResult &result)
 {
    for(int attempt=0; attempt<=InpTradeRetryCount; ++attempt)
    {
@@ -587,17 +613,29 @@ bool SendTradeRequestWithRetry(MqlTradeRequest &request, const string context, c
          }
          if(!IsTradeCheckRetcodeSuccess(check.retcode))
          {
-            PrintFormat("%s: OrderCheck rejected on %s. retcode=%u comment=%s volume=%.2f price=%.5f sl=%.5f margin_free=%.2f",
-                        context, request.symbol, check.retcode, check.comment, request.volume, request.price,
-                        request.sl, check.margin_free);
+            PrintFormat(
+               "%s: OrderCheck rejected on %s. retcode=%u comment=%s "
+               + "volume=%.2f price=%.5f sl=%.5f margin_free=%.2f",
+               context,
+               request.symbol,
+               check.retcode,
+               check.comment,
+               request.volume,
+               request.price,
+               request.sl,
+               check.margin_free
+            );
             return false;
          }
       }
 
       ZeroMemory(result);
       ResetLastError();
-      if(OrderSend(request, result) && IsTradeRetcodeSuccess(result.retcode))
+      if(OrderSend(request, result)
+         && IsTradeRetcodeSuccessForAction(request.action, result.retcode))
+      {
          return true;
+      }
 
       PrintFormat("%s: OrderSend failed on %s. retcode=%u comment=%s err=%d volume=%.2f price=%.5f sl=%.5f type=%d",
                   context, request.symbol, result.retcode, result.comment, GetLastError(),
@@ -819,8 +857,14 @@ void ProcessPendingTradeVerifications(const bool force_refresh)
       {
          if(verification.attempts > 0)
          {
-            PrintFormat("FXRC execution verification completed on %s after %d timed check(s). context=%s expected_dir=%d",
-                        verification.symbol, verification.attempts, verification.context, verification.expected_dir);
+            PrintFormat(
+               "FXRC execution verification completed on %s after %d "
+               + "timed check(s). context=%s expected_dir=%d",
+               verification.symbol,
+               verification.attempts,
+               verification.context,
+               verification.expected_dir
+            );
          }
          RemoveManagedStateVerificationAt(i);
          continue;
@@ -832,8 +876,14 @@ void ProcessPendingTradeVerifications(const bool force_refresh)
       g_pending_state_verifications[i].attempts++;
       if(g_pending_state_verifications[i].attempts >= InpTradeVerifyAttempts)
       {
-         PrintFormat("FXRC execution verification timed out on %s after %d timed check(s). context=%s expected_dir=%d",
-                     verification.symbol, g_pending_state_verifications[i].attempts, verification.context, verification.expected_dir);
+         PrintFormat(
+            "FXRC execution verification timed out on %s after %d "
+            + "timed check(s). context=%s expected_dir=%d",
+            verification.symbol,
+            g_pending_state_verifications[i].attempts,
+            verification.context,
+            verification.expected_dir
+         );
          RemoveManagedStateVerificationAt(i);
          continue;
       }

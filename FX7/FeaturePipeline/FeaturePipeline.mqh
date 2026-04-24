@@ -633,7 +633,18 @@ bool ResolveValueSignal(const string symbol,
    bool ppp_ok = false;
    string ppp_reason = "";
    if(ValueModelUsesPPP())
-      ppp_ok = ComputePPPValueSignal(symbol, current_mid_px, asof_time, ppp_signal, ppp_gap, fair_value, macro_date, ppp_reason);
+   {
+      ppp_ok = ComputePPPValueSignal(
+         symbol,
+         current_mid_px,
+         asof_time,
+         ppp_signal,
+         ppp_gap,
+         fair_value,
+         macro_date,
+         ppp_reason
+      );
+   }
 
    if(InpValueModel == FXRC_VALUE_MODEL_PROXY)
    {
@@ -644,7 +655,15 @@ bool ResolveValueSignal(const string symbol,
       }
       signal = proxy_signal;
       value_gap = proxy_gap;
-      reliability = BuildValueInfluenceScale(asof_time, macro_date, proxy_ok, proxy_signal, ppp_ok, ppp_signal, intraday_vol_ratio);
+      reliability = BuildValueInfluenceScale(
+         asof_time,
+         macro_date,
+         proxy_ok,
+         proxy_signal,
+         ppp_ok,
+         ppp_signal,
+         intraday_vol_ratio
+      );
       signal *= reliability;
       return true;
    }
@@ -656,7 +675,15 @@ bool ResolveValueSignal(const string symbol,
          signal = ppp_signal;
          value_gap = ppp_gap;
          ppp_weight = 1.0;
-         reliability = BuildValueInfluenceScale(asof_time, macro_date, proxy_ok, proxy_signal, ppp_ok, ppp_signal, intraday_vol_ratio);
+         reliability = BuildValueInfluenceScale(
+            asof_time,
+            macro_date,
+            proxy_ok,
+            proxy_signal,
+            ppp_ok,
+            ppp_signal,
+            intraday_vol_ratio
+         );
          signal *= reliability;
          return true;
       }
@@ -665,7 +692,15 @@ bool ResolveValueSignal(const string symbol,
       {
          signal = proxy_signal;
          value_gap = proxy_gap;
-         reliability = BuildValueInfluenceScale(asof_time, macro_date, proxy_ok, proxy_signal, ppp_ok, ppp_signal, intraday_vol_ratio);
+         reliability = BuildValueInfluenceScale(
+            asof_time,
+            macro_date,
+            proxy_ok,
+            proxy_signal,
+            ppp_ok,
+            ppp_signal,
+            intraday_vol_ratio
+         );
          signal *= reliability;
          return true;
       }
@@ -681,18 +716,32 @@ bool ResolveValueSignal(const string symbol,
       double freshness = 1.0;
       if(macro_date > 0 && asof_time > macro_date)
       {
-         double age_frac = (double)(asof_time - macro_date) / (double)MathMax(1, InpPPPMaxDataAgeDays * 24 * 60 * 60);
+         double age_frac = (
+            (double)(asof_time - macro_date)
+            / (double)MathMax(1, InpPPPMaxDataAgeDays * 24 * 60 * 60)
+         );
          freshness = 1.0 - Clip(age_frac, 0.0, 1.0);
       }
 
-      ppp_blend_weight *= (0.50 + 0.50 * freshness) * (0.50 + 0.50 * MathMin(MathAbs(ppp_signal), 1.0));
+      ppp_blend_weight *= (
+         (0.50 + 0.50 * freshness)
+         * (0.50 + 0.50 * MathMin(MathAbs(ppp_signal), 1.0))
+      );
       proxy_weight *= (0.50 + 0.50 * MathMin(MathAbs(proxy_signal), 1.0));
       NormalizeValueBlendWeights(proxy_weight, ppp_blend_weight);
 
       signal = proxy_weight * proxy_signal + ppp_blend_weight * ppp_signal;
       value_gap = proxy_weight * proxy_gap + ppp_blend_weight * ppp_gap;
       ppp_weight = ppp_blend_weight;
-      reliability = BuildValueInfluenceScale(asof_time, macro_date, proxy_ok, proxy_signal, ppp_ok, ppp_signal, intraday_vol_ratio);
+      reliability = BuildValueInfluenceScale(
+         asof_time,
+         macro_date,
+         proxy_ok,
+         proxy_signal,
+         ppp_ok,
+         ppp_signal,
+         intraday_vol_ratio
+      );
       signal *= reliability;
       return true;
    }
@@ -702,7 +751,15 @@ bool ResolveValueSignal(const string symbol,
       signal = ppp_signal;
       value_gap = ppp_gap;
       ppp_weight = 1.0;
-      reliability = BuildValueInfluenceScale(asof_time, macro_date, proxy_ok, proxy_signal, ppp_ok, ppp_signal, intraday_vol_ratio);
+      reliability = BuildValueInfluenceScale(
+         asof_time,
+         macro_date,
+         proxy_ok,
+         proxy_signal,
+         ppp_ok,
+         ppp_signal,
+         intraday_vol_ratio
+      );
       signal *= reliability;
       return true;
    }
@@ -711,7 +768,15 @@ bool ResolveValueSignal(const string symbol,
    {
       signal = proxy_signal;
       value_gap = proxy_gap;
-      reliability = BuildValueInfluenceScale(asof_time, macro_date, proxy_ok, proxy_signal, ppp_ok, ppp_signal, intraday_vol_ratio);
+      reliability = BuildValueInfluenceScale(
+         asof_time,
+         macro_date,
+         proxy_ok,
+         proxy_signal,
+         ppp_ok,
+         ppp_signal,
+         intraday_vol_ratio
+      );
       signal *= reliability;
       return true;
    }
@@ -1065,7 +1130,10 @@ bool ComputeBrokerCarrySignal(const string symbol, const double mid_px, double &
 }
 
 // Computes the slow EWMA log-price anchor from a newest-first close series.
-double SlowEWMALogAnchorNewestFirst(const double &close[], const int newest_shift, const int oldest_shift, const int half_life)
+double SlowEWMALogAnchorNewestFirst(const double &close[],
+                                    const int newest_shift,
+                                    const int oldest_shift,
+                                    const int half_life)
 {
    double lambda = MathExp(-MathLog(2.0) / MathMax(1.0, (double)half_life));
    double anchor = 0.0;
