@@ -403,7 +403,14 @@ double ModernSizingScore(const int idx, const int dir, const double atr_pct)
    if(idx < 0 || idx >= g_num_symbols)
       return 0.0;
 
-   double entry_threshold = MathMax(BuildEntryThresholdDirectional(idx, dir), MathMax(InpBaseEntryThreshold, 0.01));
+   double effective_base_threshold = MathMax(
+      InpBaseEntryThreshold * FXRCAdaptiveEntryThresholdMultiplier(),
+      0.01
+   );
+   double entry_threshold = MathMax(
+      BuildEntryThresholdDirectional(idx, dir),
+      effective_base_threshold
+   );
    double abs_s = MathAbs(g_S[idx]);
    double excess_strength = MathMax(0.0, abs_s - entry_threshold);
    double threshold_edge = TanhLikePositive(excess_strength / MathMax(entry_threshold, 0.01));

@@ -113,8 +113,10 @@ def _fit_predict(
     x_test = scaler.transform(test.loc[:, features])
 
     if len(np.unique(y_train)) < 2:
-        p = np.full(len(test), float(np.mean(y_train)))
-        return p, np.zeros(len(features)), float(np.log(p[0] / max(1.0 - p[0], 1e-12)))
+        p_value = float(np.clip(np.mean(y_train), 0.01, 0.99))
+        p = np.full(len(test), p_value)
+        intercept = float(np.log(p_value / (1.0 - p_value)))
+        return p, np.zeros(len(features)), intercept
 
     model = LogisticRegression(
         penalty="elasticnet",

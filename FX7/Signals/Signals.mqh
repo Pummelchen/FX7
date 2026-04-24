@@ -211,7 +211,14 @@ void UpdatePanicGateAndScores()
          continue;
       }
 
-      bool bar_advanced = (ArraySize(g_symbol_bar_advanced) == g_num_symbols && g_symbol_bar_advanced[i]);
+      bool bar_advanced = (
+         ArraySize(g_symbol_bar_advanced) == g_num_symbols
+         && g_symbol_bar_advanced[i]
+      );
+      bool should_update_signal_state = (
+         bar_advanced
+         || g_last_processed_signal_bar[i] == 0
+      );
 
       int alpha_dir = SignD(g_CompositeCore[i]);
       if(alpha_dir == 0)
@@ -223,7 +230,7 @@ void UpdatePanicGateAndScores()
       );
       // Regime/cost remain hard gates below; keep the score focused on directional conviction.
       g_E[i] = BuildSignalCoreScore(i);
-      if(bar_advanced || g_last_processed_signal_bar[i] == 0)
+      if(should_update_signal_state)
       {
          g_S[i] = InpAlphaSmooth * g_E[i] + (1.0 - InpAlphaSmooth) * g_S[i];
          g_last_processed_signal_bar[i] = g_last_closed_bar[i];
@@ -239,7 +246,7 @@ void UpdatePanicGateAndScores()
 
       if(has_raw_direction)
       {
-         if(bar_advanced || g_last_processed_signal_bar[i] == 0)
+         if(should_update_signal_state)
          {
             if(g_entry_dir_raw[i] == dir)
                g_persist_count[i]++;

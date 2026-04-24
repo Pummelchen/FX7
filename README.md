@@ -90,6 +90,10 @@ InpTargetTradesPerDay=6.0
 InpCalibrationLookbackDays=90
 ```
 
+The default accepted-signal and account-order caps are `10`, so active mode is
+not immediately capped by a five-order ceiling before risk, margin, exposure,
+execution, and broker constraints are evaluated.
+
 Profiles:
 
 - `FXRC_PROFILE_CONSERVATIVE`: closest to static multi-premia behavior.

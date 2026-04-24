@@ -45,7 +45,11 @@ The learner can only make more already-qualified candidates available. It cannot
 - execution quality and quote checks
 - protective stop requirements
 
-If the target is six trades per day but `InpMaxAccountOrders=5` and average holding time is several days, the account-order cap will dominate realized frequency.
+If the target is six trades per day but `InpMaxAccountOrders` is set below the
+effective number of simultaneous positions implied by the holding period, the
+account-order cap will dominate realized frequency. The default account and
+accepted-signal caps are aligned with active mode at `10`, but they still need
+to be raised deliberately for higher-throughput research profiles.
 
 ## Static Mode
 

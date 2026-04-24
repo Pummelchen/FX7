@@ -340,6 +340,26 @@ double FXRCAdaptiveLowestClose(const double &close[],
    return lowest;
 }
 
+// Appends one calibration sample using chunked array growth.
+void FXRCAdaptiveAppendOpportunitySample(double &abs_scores[],
+                                         double &confidences[],
+                                         int &sample_count,
+                                         int &capacity,
+                                         const double abs_score,
+                                         const double confidence)
+{
+   if(sample_count >= capacity)
+   {
+      capacity += 1024;
+      ArrayResize(abs_scores, capacity);
+      ArrayResize(confidences, capacity);
+   }
+
+   abs_scores[sample_count] = abs_score;
+   confidences[sample_count] = confidence;
+   sample_count++;
+}
+
 // Computes the closed-bar momentum score used for startup opportunity calibration.
 bool FXRCAdaptiveScoreAtShift(const double &close[],
                               const int shift,
@@ -441,6 +461,8 @@ int FXRCAdaptiveCollectOpportunitySamples(double &abs_scores[], double &confiden
 {
    ArrayResize(abs_scores, 0);
    ArrayResize(confidences, 0);
+   int sample_count = 0;
+   int capacity = 0;
 
    int seconds = PeriodSeconds(InpSignalTF);
    int bars_per_day = (seconds > 0 ? (int)MathCeil(86400.0 / (double)seconds) : 24);
@@ -479,15 +501,20 @@ int FXRCAdaptiveCollectOpportunitySamples(double &abs_scores[], double &confiden
          if(!FXRCAdaptiveScoreAtShift(close, shift, abs_score, confidence))
             continue;
 
-         int new_size = ArraySize(abs_scores) + 1;
-         ArrayResize(abs_scores, new_size);
-         ArrayResize(confidences, new_size);
-         abs_scores[new_size - 1] = abs_score;
-         confidences[new_size - 1] = confidence;
+         FXRCAdaptiveAppendOpportunitySample(
+            abs_scores,
+            confidences,
+            sample_count,
+            capacity,
+            abs_score,
+            confidence
+         );
       }
    }
 
-   return ArraySize(abs_scores);
+   ArrayResize(abs_scores, sample_count);
+   ArrayResize(confidences, sample_count);
+   return sample_count;
 }
 
 // Refines entry threshold and confidence floor from historical opportunity samples.

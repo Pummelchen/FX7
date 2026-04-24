@@ -69,7 +69,7 @@ string FXRCResearchBlockReasonCode(const int idx, const bool was_candidate)
       return "persistence";
    if(FXRCRegimeStateBlocksEntry(idx))
       return "regime_state_stress";
-   if(g_Conf[idx] < InpMinConfidence)
+   if(g_Conf[idx] < FXRCAdaptiveMinConfidenceFloor())
       return "low_confidence";
    if(g_G[idx] < InpMinRegimeGate)
       return "low_regime_gate";

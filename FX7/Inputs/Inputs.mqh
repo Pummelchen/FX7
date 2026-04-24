@@ -9,8 +9,8 @@ input bool               InpProcessCurrentClosedBarOnAttach = false;
 input bool               InpRequireSynchronizedSignalBars = true;
 input bool               InpAllowLong                 = true;
 input bool               InpAllowShort                = true;
-input int                InpMaxAcceptedSignals        = 5;
-input int                InpMaxAccountOrders          = 5;
+input int                InpMaxAcceptedSignals        = 10;
+input int                InpMaxAccountOrders          = 10;
 
 enum ENUM_FXRC_STRATEGY_PROFILE
 {

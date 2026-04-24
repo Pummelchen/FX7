@@ -180,7 +180,7 @@ bool FXRCXMomContributionScores(const int lookback,
 
    for(int i=0; i<g_num_symbols; ++i)
    {
-      if(!g_symbol_data_ok[i])
+      if(!IsCrossSectionallyEligibleSymbol(i))
          continue;
 
       double ret = 0.0;
@@ -232,7 +232,7 @@ bool FXRCXMomLeastSquaresScores(const int lookback,
 
    for(int i=0; i<g_num_symbols; ++i)
    {
-      if(!g_symbol_data_ok[i])
+      if(!IsCrossSectionallyEligibleSymbol(i))
          continue;
 
       double ret = 0.0;
@@ -362,7 +362,7 @@ bool FXRCRefreshCrossSectionalMomentumForCycle()
 
    for(int i=0; i<g_num_symbols; ++i)
    {
-      if(!g_symbol_data_ok[i])
+      if(!IsCrossSectionallyEligibleSymbol(i))
          continue;
 
       int base_idx = FXRCXMomCurrencyIndex(g_base_ccy[i], currencies);

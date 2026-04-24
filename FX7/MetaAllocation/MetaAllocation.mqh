@@ -126,9 +126,9 @@ string FXRCMetaDominantSleeveBucket(const int idx)
    if(idx < 0 || idx >= g_num_symbols)
       return "UNKNOWN";
 
-   double momentum = MathAbs(InpWeightMomentum * g_M[idx]);
-   double carry = MathAbs(InpWeightCarry * g_Carry[idx]);
-   double value = MathAbs(InpWeightValue * g_Value[idx]);
+   double momentum = MathAbs(FXRCAdaptiveMomentumWeight() * g_M[idx]);
+   double carry = MathAbs(FXRCAdaptiveCarryWeight() * g_Carry[idx]);
+   double value = MathAbs(FXRCAdaptiveValueWeight() * g_Value[idx]);
 
    if(momentum >= carry && momentum >= value)
       return "MOMENTUM_DOM";
