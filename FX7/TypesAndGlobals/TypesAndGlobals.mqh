@@ -103,6 +103,36 @@ struct FXRCExecutionQualityDecision
    string reason;
 };
 
+struct FXRCForwardPointsRecord
+{
+   string   symbol;
+   datetime timestamp;
+   int      tenor_days;
+   double   forward_points;
+   double   spot_reference;
+   double   bid_forward_points;
+   double   ask_forward_points;
+};
+
+struct FXRCProbabilityCoefficient
+{
+   string feature_name;
+   double coefficient;
+   bool   intercept;
+   string optional_symbol;
+   string optional_base_currency;
+   string optional_quote_currency;
+};
+
+struct FXRCProbabilityDecision
+{
+   bool   model_available;
+   bool   allow_entry;
+   double p_up;
+   double risk_multiplier;
+   string reason;
+};
+
 //------------------------- Globals ----------------------------------//
 string   g_symbols[];
 bool     g_trade_allowed[];
@@ -145,6 +175,13 @@ double   g_CompositeCore[];
 double   g_CarryAnnualSpread[];
 double   g_ValueGap[];
 datetime g_ValueMacroDate[];
+double   g_XMomScore[];
+bool     g_XMomValid[];
+double   g_MediumTrendScore[];
+bool     g_MediumTrendValid[];
+double   g_RegimePTrend[];
+double   g_RegimePChoppy[];
+double   g_RegimePStress[];
 double   g_theta_in_eff[];
 double   g_theta_out_eff[];
 int      g_persist_count[];
@@ -199,6 +236,22 @@ string   g_ppp_index_ccy[];
 int      g_ppp_index_start[];
 int      g_ppp_index_count[];
 FXRCPPPCacheState g_ppp_cache;
+
+FXRCForwardPointsRecord g_forward_points_records[];
+bool     g_forward_points_loaded = false;
+datetime g_forward_points_last_load_time = 0;
+string   g_forward_points_load_reason = "";
+
+FXRCProbabilityCoefficient g_probability_coefficients[];
+bool     g_probability_model_loaded = false;
+bool     g_probability_model_available = false;
+string   g_probability_model_reason = "";
+double   g_probability_p_up[];
+double   g_probability_risk_multiplier[];
+string   g_probability_reason[];
+
+bool     g_research_export_header_checked = false;
+datetime g_research_export_last_bar_time = 0;
 
 FXRCMetaBucketStats g_meta_stats[];
 FXRCMetaOpenContext g_meta_open_contexts[];

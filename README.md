@@ -28,12 +28,19 @@
 - `FX7/MetaAllocation/MetaAllocation.mqh`: optional realized-R context learner and candidate/risk scaler
 - `FX7/CurrencyExposure/CurrencyExposure.mqh`: optional currency-factor exposure vector and concentration limiter
 - `FX7/ExecutionQuality/ExecutionQuality.mqh`: optional spread, rollover, quote-stability, and news blackout governor
+- `FX7/CrossSectionalMomentum/CrossSectionalMomentum.mqh`: optional latent currency-strength momentum sleeve
+- `FX7/MediumTermTrend/MediumTermTrend.mqh`: optional H4/D1 closed-bar trend sleeve for 1-day and 1-week context
+- `FX7/ResearchExport/ResearchExport.mqh`: optional ex-ante feature snapshot export for offline validation
+- `FX7/ProbabilityModel/ProbabilityModel.mqh`: optional calibrated logistic probability-model consumer
+- `FX7/ForwardCarry/ForwardCarry.mqh`: optional forward-points carry support with stale-data controls
+- `FX7/RegimeState/RegimeState.mqh`: optional filtered trend/chop/stress regime-state layer
 - `FX7/Events/Events.mqh`: `OnInit`, `OnTick`, `OnTimer`, `OnTradeTransaction`, and runtime orchestration
 - `FX7/TradeExecution/TradeExecution.mqh`: trade planning, request construction, send/retry, and verification logic
 - `FX7/Signals/Signals.mqh`: portfolio ranking, novelty, crowding, and candidate selection
 - `FX7/FeaturePipeline/FeaturePipeline.mqh`: symbol-level feature computation, value/carry integration, and sleeve blending
 - `FX7/MacroData/MacroData.mqh`: startup-built carry/PPP cache creation, dependency health, and macro lookup helpers
 - `FX7/Core/Core.mqh`: validation, reset helpers, conversions, and shared utility functions
+- `research/`: offline feature labeling, walk-forward validation, and logistic probability-model training tools
 
 ## Data Requirements
 
@@ -42,14 +49,18 @@ FX7 can run with different dependency profiles:
 - Pure momentum mode: no macro dependency required
 - Carry mode: when the carry sleeve has a positive weight and uses rate differentials, the EA builds an in-memory rate-differential cache during startup
 - PPP or hybrid value mode: when the value sleeve has a positive weight and the selected value model uses PPP, the EA builds an in-memory CPI/PPP cache during startup
+- Optional forward-points carry: when `InpUseForwardPointsCarry=true`, FX7 can read `InpForwardPointsFile` from common terminal files and rejects stale rows via `InpForwardPointsMaxStaleDays`
+- Optional probability filtering: when `InpUseProbabilityModel=true`, FX7 reads an offline-trained coefficient CSV from `InpProbabilityModelFile`
 
-No external CSV files are used anymore. At startup the EA:
+The baseline EA no longer requires external CSV files for carry/PPP macro dependencies. At startup the EA:
 
 - pulls economic-calendar history for the currencies used by `InpSymbols`
 - preserves calendar release timestamps so macro values are only available after publication
 - reshapes carry into a forward-filled series and PPP into a CPI-style index path
 - falls back to built-in major-currency profiles if calendar data is missing
 - keeps the existing dependency health checks, freeze/flatten policy, and freshness controls
+
+The optional forward-points, research-export, and probability-model files are explicit research/operator inputs. They are disabled by default and do not affect baseline behavior unless enabled.
 
 If you enable carry or PPP modes for currencies that are neither covered by the terminal economic calendar nor the built-in fallback profiles, FX7 will treat that as a dependency failure and apply the configured runtime policy.
 
@@ -66,6 +77,24 @@ FX7 includes three disabled-by-default overlays that can scale, suppress, thrott
 - Execution-quality governor: `InpUseExecutionQualityGovernor` blocks or scales down entries during rollover windows, abnormal spreads, unstable quotes, elevated execution-cost states, and optional high-impact calendar-event blackout windows.
 
 Recommended first live use is observation-heavy and conservative: enable one overlay at a time, monitor logs, and avoid aggressive meta-learning boosts until enough closed FX7-owned trades have accumulated.
+
+## Optional Research Extensions
+
+FX7 also includes disabled-by-default research components for transparent directional forecasting:
+
+- Cross-sectional currency momentum: `InpUseCrossSectionalMomentum` estimates latent currency strength from the full FX universe and blends a bounded `xmom_score` only when `InpXMomCompositeWeight` is non-zero.
+- Medium-term trend: `InpUseMediumTermTrend` adds a bounded H4/D1 trend score intended for 1-day and 1-week context, not current-bar prediction.
+- Feature export: `InpUseResearchFeatureExport` writes closed-bar ex-ante feature rows without future labels.
+- Probability model: `InpUseProbabilityModel` consumes offline-trained logistic coefficients and can block or scale already-qualified candidates using calibrated `P(UP)`.
+- Regime state: `InpUseRegimeStateFilter` computes transparent trend/chop/stress probabilities and can remain feature-only or conservatively gate sleeves.
+
+The live EA remains closed-bar and auditable. It does not train models, compute labels, or use future returns in the signal path.
+
+Offline Python research tooling is in `research/` and requires:
+
+```bash
+python -m pip install -r research/requirements.txt
+```
 
 ## Installation
 
@@ -84,6 +113,11 @@ Copy the full `FX7` folder into `MQL5/Experts/FX7/` so MetaEditor can resolve `F
 - [Wiki Home](https://github.com/Pummelchen/FX7/wiki)
 - [Live Trader Guide](https://github.com/Pummelchen/FX7/wiki/Live-Trader)
 - [Backtester Guide](https://github.com/Pummelchen/FX7/wiki/Backtester)
+- [Research Extensions](docs/FX7_RESEARCH_EXTENSIONS.md)
+- [Probability Model](docs/FX7_PROBABILITY_MODEL.md)
+- [Cross-Sectional Momentum](docs/FX7_CROSS_SECTIONAL_MOMENTUM.md)
+- [Validation Protocol](docs/FX7_VALIDATION_PROTOCOL.md)
+- [Research Tooling](research/README.md)
 
 ## Validation
 

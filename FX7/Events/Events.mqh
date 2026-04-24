@@ -7,6 +7,10 @@ void ResetStartupState()
    g_hard_stop_reason = "";
    ResetCarryCacheState(g_carry_cache);
    ResetPPPCacheState(g_ppp_cache);
+   FXRCClearForwardPointsCache();
+   FXRCClearProbabilityModel();
+   g_research_export_header_checked = false;
+   g_research_export_last_bar_time = 0;
 }
 
 // Returns the number of symbols currently allowed to trade.
@@ -98,7 +102,7 @@ void LogStartupMacroFallbackWarnings()
    if(MQLInfoInteger(MQL_TESTER))
       return;
 
-   if(CarryModelUsesExternal() && CacheUsesBuiltInFallback(g_carry_cache.source_file))
+   if(CarryModelUsesRateDifferentialData() && CacheUsesBuiltInFallback(g_carry_cache.source_file))
    {
       Print(
          "FXRC startup warning: carry cache is using built-in fallback "
@@ -122,14 +126,14 @@ bool EnsureStartupCarryCache(const int total_steps)
 {
    const int step = 8;
    const string label = "Build carry macro cache";
-   if(!CarryModelUsesExternal())
+   if(!CarryModelUsesRateDifferentialData())
    {
       LogStartupStep(
          step,
          total_steps,
          label,
          "Skipped",
-         "broker-swap carry model"
+         "no rate-differential carry source"
       );
       return true;
    }
@@ -411,6 +415,18 @@ int FX7HandleInit()
    }
    LogStartupStep(6, total_steps, "Initialize tradable filter", "Done");
 
+   FXRCLogCrossSectionalMomentumStartup();
+   if(InpUseForwardPointsCarry)
+   {
+      bool forward_ok = FXRCLoadForwardPointsCache(true);
+      if(!forward_ok && CarrySignalRequiresExternalData())
+      {
+         PrintFormat("Required forward-points carry data is unavailable. %s", g_forward_points_load_reason);
+         return INIT_FAILED;
+      }
+   }
+   if(InpUseProbabilityModel)
+      FXRCLoadProbabilityModel(true);
    FXRCLoadMetaStats();
 
    if(!EnsureReferenceEURNotional())
@@ -633,6 +649,12 @@ bool RefreshCycleFeatures(const bool allow_stale_dependency_values)
             NeutralizeSymbol(i);
          }
       }
+   }
+
+   if(any_ok)
+   {
+      FXRCRefreshCrossSectionalMomentumForCycle();
+      FXRCRebuildCompositePremiaAlphaForCycle();
    }
 
    return any_ok;
@@ -978,6 +1000,13 @@ void ExecuteModel(const bool allow_new_entries = true)
       return;
 
    UpdatePanicGateAndScores();
+   if(InpUseRegimeStateFilter)
+   {
+      FXRCRefreshRegimeStateForCycle();
+      FXRCRebuildCompositePremiaAlphaForCycle();
+      UpdatePanicGateAndScores();
+   }
+
    BuildCorrelationMatrices();
    EnsureProtectiveStops();
    FXRCExecutionSnapshot cycle_snapshot;
@@ -985,6 +1014,7 @@ void ExecuteModel(const bool allow_new_entries = true)
 
    int candidates[];
    FXRCResetMetaCycleState();
+   FXRCResetProbabilityCycleState();
    CollectTradeCandidates(candidates);
    LogNoCandidateDiagnostic(candidates);
 
@@ -993,6 +1023,7 @@ void ExecuteModel(const bool allow_new_entries = true)
    int target_dir[];
    int accepted_order[];
    BuildTradeTargets(candidates, target_dir, accepted_order);
+   FXRCExportResearchFeatures(candidates);
    LogNoTradeTargetDiagnostic(candidates, target_dir);
 
    int active_orders_total = cycle_snapshot.account_active_orders;

@@ -317,6 +317,8 @@ bool UpdateSymbolFeatures(const int i,
       return false;
 
    ComputeTrendFeatureState(i, rates, copied, close);
+   FXRCRefreshMediumTermTrendForSymbol(i);
+   FXRCRefreshRegimeStateForSymbol(i);
 
    double mid_px = 0.0;
    double signal_px = 0.0;
@@ -373,6 +375,13 @@ void NeutralizeSymbol(const int i)
    g_ValueFairValue[i] = 0.0;
    g_ValuePPPWeight[i] = 0.0;
    g_ValueReliability[i] = 0.0;
+   g_XMomScore[i] = 0.0;
+   g_XMomValid[i] = false;
+   g_MediumTrendScore[i] = 0.0;
+   g_MediumTrendValid[i] = false;
+   g_RegimePTrend[i] = 0.0;
+   g_RegimePChoppy[i] = 0.0;
+   g_RegimePStress[i] = 0.0;
    g_CarryAnnualSpread[i] = g_ValueGap[i] = 0.0;
    g_ValueMacroDate[i] = 0;
    g_G[i] = g_K[i] = g_K_long[i] = g_K_short[i] = 0.0;
@@ -567,8 +576,32 @@ double BuildCompositePremiaAlpha(const int idx)
 {
    double w_m, w_c, w_v;
    ComputeCompositeAllocatorWeights(idx, w_m, w_c, w_v);
+
+   double trend_multiplier = FXRCRegimeTrendMultiplier(idx);
+   double carry_multiplier = FXRCRegimeCarryMultiplier(idx);
+   double xmom_multiplier = FXRCRegimeXMomMultiplier(idx);
+
    // Value is intentionally treated as a slow, reliability-scaled bias in the composite.
-   return w_m * g_M[idx] + w_c * g_Carry[idx] + w_v * g_Value[idx];
+   double composite = trend_multiplier * w_m * g_M[idx]
+                    + carry_multiplier * w_c * g_Carry[idx]
+                    + w_v * g_Value[idx];
+
+   if(InpUseCrossSectionalMomentum && g_XMomValid[idx])
+      composite += xmom_multiplier * InpXMomCompositeWeight * g_XMomScore[idx];
+   if(InpUseMediumTermTrend && g_MediumTrendValid[idx])
+      composite += trend_multiplier * InpMediumTrendCompositeWeight * g_MediumTrendScore[idx];
+
+   return composite;
+}
+
+// Rebuilds composite alpha after cross-sectional and regime overlays refresh.
+void FXRCRebuildCompositePremiaAlphaForCycle()
+{
+   for(int i=0; i<g_num_symbols; ++i)
+   {
+      if(g_symbol_data_ok[i] && !IsSymbolDataStale(i))
+         g_CompositeCore[i] = BuildCompositePremiaAlpha(i);
+   }
 }
 
 // Computes composite allocator weights.
@@ -1024,6 +1057,91 @@ bool ComputeCarrySignal(const string symbol,
    annual_spread_frac = 0.0;
    macro_date = 0;
    reason = "";
+
+   if(InpCarryModel == FXRC_CARRY_MODEL_FORWARD_POINTS_CSV)
+   {
+      if(ComputeForwardPointsCarrySignal(
+         symbol,
+         mid_px,
+         asof_time,
+         signal,
+         annual_spread_frac,
+         macro_date,
+         reason))
+      {
+         return true;
+      }
+
+      string forward_reason = reason;
+      if(InpCarryFallbackToRateDifferential
+         && ComputeRateCarrySignal(
+            symbol,
+            asof_time,
+            signal,
+            annual_spread_frac,
+            macro_date,
+            reason))
+      {
+         reason = "rate-differential fallback after forward-points failure: "
+                + forward_reason;
+         return true;
+      }
+
+      if(InpCarryFallbackToBrokerSwap
+         && ComputeBrokerCarrySignal(symbol, mid_px, signal, annual_spread_frac))
+      {
+         reason = "broker-swap fallback after forward-points failure: "
+                + forward_reason;
+         return true;
+      }
+
+      reason = forward_reason;
+      return false;
+   }
+
+   if(InpCarryModel == FXRC_CARRY_MODEL_HYBRID_BEST_AVAILABLE)
+   {
+      string first_reason = "";
+      if(InpUseForwardPointsCarry)
+      {
+         if(ComputeForwardPointsCarrySignal(
+            symbol,
+            mid_px,
+            asof_time,
+            signal,
+            annual_spread_frac,
+            macro_date,
+            first_reason))
+         {
+            return true;
+         }
+      }
+
+      if(InpCarryFallbackToRateDifferential
+         && ComputeRateCarrySignal(
+            symbol,
+            asof_time,
+            signal,
+            annual_spread_frac,
+            macro_date,
+            reason))
+      {
+         return true;
+      }
+
+      if(InpCarryFallbackToBrokerSwap
+         && ComputeBrokerCarrySignal(symbol, mid_px, signal, annual_spread_frac))
+      {
+         return true;
+      }
+
+      reason = (
+         StringLen(first_reason) > 0
+         ? first_reason
+         : "hybrid carry has no usable source"
+      );
+      return false;
+   }
 
    if(InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF)
    {

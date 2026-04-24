@@ -20,7 +20,9 @@ input bool               InpUseDynamicAllocator       = true;
 enum ENUM_FXRC_CARRY_MODEL
 {
    FXRC_CARRY_MODEL_BROKER_SWAP = 0,
-   FXRC_CARRY_MODEL_RATE_DIFF = 1
+   FXRC_CARRY_MODEL_RATE_DIFF = 1,
+   FXRC_CARRY_MODEL_FORWARD_POINTS_CSV = 2,
+   FXRC_CARRY_MODEL_HYBRID_BEST_AVAILABLE = 3
 };
 enum ENUM_FXRC_VALUE_MODEL
 {
@@ -32,6 +34,11 @@ input ENUM_FXRC_CARRY_MODEL InpCarryModel             = FXRC_CARRY_MODEL_RATE_DI
 input bool               InpCarryAllowBrokerFallback  = false;
 input int                InpCarryMaxDataAgeDays       = 35;
 input int                InpCarryReloadHours          = 12;
+input bool               InpUseForwardPointsCarry     = false;
+input string             InpForwardPointsFile         = "FX7_forward_points.csv";
+input int                InpForwardPointsMaxStaleDays = 7;
+input bool               InpCarryFallbackToRateDifferential = true;
+input bool               InpCarryFallbackToBrokerSwap = true;
 input ENUM_FXRC_VALUE_MODEL InpValueModel             = FXRC_VALUE_MODEL_PPP;
 input ENUM_TIMEFRAMES    InpValueTF                   = PERIOD_D1;
 input int                InpValueLookbackBars         = 252;
@@ -48,6 +55,41 @@ input double             InpAllocatorMomentumBoost    = 0.35;
 input double             InpAllocatorValueBoost       = 0.25;
 input double             InpAllocatorCarryVolPenalty  = 1.00;
 input double             InpCarryVolCutoff            = 1.25;
+
+input group "=== Cross-Sectional Currency Momentum ==="
+input bool               InpUseCrossSectionalMomentum = false;
+input ENUM_TIMEFRAMES    InpXMomTF                    = PERIOD_D1;
+input int                InpXMomLookback1             = 20;
+input int                InpXMomLookback2             = 60;
+input int                InpXMomLookback3             = 120;
+input double             InpXMomWeight1               = 0.50;
+input double             InpXMomWeight2               = 0.30;
+input double             InpXMomWeight3               = 0.20;
+input double             InpXMomCompositeWeight       = 0.0;
+input bool               InpXMomUseCurrencyDecomposition = true;
+input bool               InpXMomVolNormalize          = true;
+input double             InpXMomTanhScale             = 1.5;
+input double             InpXMomMinSymbols            = 8;
+input double             InpXMomRidgeLambda           = 1e-4;
+input bool               InpXMomRequireSynchronizedBars = true;
+
+input group "=== Medium-Term Trend Layer ==="
+input bool               InpUseMediumTermTrend        = false;
+input double             InpMediumTrendCompositeWeight = 0.0;
+input ENUM_TIMEFRAMES    InpMediumTrendTF1            = PERIOD_H4;
+input int                InpMediumTrendTF1Lookback1   = 12;
+input int                InpMediumTrendTF1Lookback2   = 30;
+input int                InpMediumTrendTF1Lookback3   = 60;
+input ENUM_TIMEFRAMES    InpMediumTrendTF2            = PERIOD_D1;
+input int                InpMediumTrendTF2Lookback1   = 5;
+input int                InpMediumTrendTF2Lookback2   = 20;
+input int                InpMediumTrendTF2Lookback3   = 60;
+input double             InpMediumTrendTF1Weight      = 0.40;
+input double             InpMediumTrendTF2Weight      = 0.60;
+input bool               InpMediumTrendVolNormalize   = true;
+input double             InpMediumTrendTanhScale      = 1.5;
+input bool               InpMediumTrendRequireAlignment = false;
+input double             InpMediumTrendAlignmentPenalty = 0.50;
 
 input group "=== Trend Core ==="
 input int                InpH1                        = 8;
@@ -185,3 +227,33 @@ input double             InpUniquenessMin             = 0.15;
 input double             InpCrowdingMax               = 0.90;
 input double             InpFXOverlapFloor            = 0.35;
 input double             InpClassOverlapFloor         = 0.20;
+
+input group "=== Research Feature Export ==="
+input bool               InpUseResearchFeatureExport  = false;
+input string             InpResearchExportFile        = "FX7_feature_export.csv";
+input bool               InpResearchExportCandidatesOnly = false;
+input bool               InpResearchExportIncludeNonCandidates = true;
+input bool               InpResearchExportFlushEveryBar = false;
+input int                InpResearchExportSchemaVersion = 1;
+
+input group "=== Probability Forecast Model ==="
+input bool               InpUseProbabilityModel       = false;
+input string             InpProbabilityModelFile      = "FX7_probability_model.csv";
+input int                InpProbabilityHorizonDays    = 5;
+input bool               InpProbabilityUseAsFilter    = true;
+input bool               InpProbabilityUseAsRiskScaler = false;
+input bool               InpProbabilityReplaceRawConfidence = false;
+input double             InpProbabilityMinEdge        = 0.03;
+input double             InpProbabilityMaxRiskScale   = 1.25;
+input double             InpProbabilityMinRiskScale   = 0.25;
+input bool               InpProbabilityBlockContradiction = true;
+
+input group "=== Regime State Filter ==="
+input bool               InpUseRegimeStateFilter      = false;
+input bool               InpRegimeStateUseAsFeatureOnly = true;
+input bool               InpRegimeStateGateCarry      = true;
+input bool               InpRegimeStateGateTrend      = false;
+input bool               InpRegimeStateGateXMom       = false;
+input double             InpRegimeStressBlockThreshold = 0.80;
+input double             InpRegimeCarryStressPenalty  = 0.50;
+input double             InpRegimeTrendChopPenalty    = 0.50;

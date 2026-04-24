@@ -593,6 +593,13 @@ bool InitArrays()
    ArrayResize(g_CarryAnnualSpread, g_num_symbols);
    ArrayResize(g_ValueGap,    g_num_symbols);
    ArrayResize(g_ValueMacroDate, g_num_symbols);
+   ArrayResize(g_XMomScore, g_num_symbols);
+   ArrayResize(g_XMomValid, g_num_symbols);
+   ArrayResize(g_MediumTrendScore, g_num_symbols);
+   ArrayResize(g_MediumTrendValid, g_num_symbols);
+   ArrayResize(g_RegimePTrend, g_num_symbols);
+   ArrayResize(g_RegimePChoppy, g_num_symbols);
+   ArrayResize(g_RegimePStress, g_num_symbols);
    ArrayResize(g_theta_in_eff, g_num_symbols);
    ArrayResize(g_theta_out_eff, g_num_symbols);
    ArrayResize(g_persist_count, g_num_symbols);
@@ -606,6 +613,9 @@ bool InitArrays()
    ArrayResize(g_symbol_history_bars, g_num_symbols);
    ArrayResize(g_symbol_history_reason, g_num_symbols);
    ArrayResize(g_exec_symbol_state, g_num_symbols);
+   ArrayResize(g_probability_p_up, g_num_symbols);
+   ArrayResize(g_probability_risk_multiplier, g_num_symbols);
+   ArrayResize(g_probability_reason, g_num_symbols);
 
    ArrayResize(g_stdret_hist, g_num_symbols * g_ret_hist_len);
    ArrayResize(g_corr_matrix, g_num_symbols * g_num_symbols);
@@ -648,6 +658,13 @@ bool InitArrays()
    ArrayInitialize(g_CarryAnnualSpread, 0.0);
    ArrayInitialize(g_ValueGap,    0.0);
    ArrayInitialize(g_ValueMacroDate, 0);
+   ArrayInitialize(g_XMomScore, 0.0);
+   ArrayInitialize(g_XMomValid, false);
+   ArrayInitialize(g_MediumTrendScore, 0.0);
+   ArrayInitialize(g_MediumTrendValid, false);
+   ArrayInitialize(g_RegimePTrend, 0.0);
+   ArrayInitialize(g_RegimePChoppy, 0.0);
+   ArrayInitialize(g_RegimePStress, 0.0);
    ArrayInitialize(g_theta_in_eff, 0.0);
    ArrayInitialize(g_theta_out_eff, 0.0);
    ArrayInitialize(g_persist_count, 0);
@@ -664,12 +681,15 @@ bool InitArrays()
    ArrayInitialize(g_corr_matrix, 0.0);
    ArrayInitialize(g_corr_eff, 0.0);
    ArrayInitialize(g_universe_stdret_hist, 0.0);
+   ArrayInitialize(g_probability_p_up, 0.5);
+   ArrayInitialize(g_probability_risk_multiplier, 1.0);
 
    for(int i=0; i<g_num_symbols; ++i)
    {
       g_base_ccy[i]  = SymbolInfoString(g_symbols[i], SYMBOL_CURRENCY_BASE);
       g_quote_ccy[i] = SymbolInfoString(g_symbols[i], SYMBOL_CURRENCY_PROFIT);
       g_symbol_history_reason[i] = "";
+      g_probability_reason[i] = "";
       ResetSymbolExecutionState(g_exec_symbol_state[i]);
    }
 
@@ -833,7 +853,9 @@ bool ValidatePremiaInputs()
    if((InpWeightMomentum + InpWeightCarry + InpWeightValue) <= EPS())
       return FailInputValidation("At least one premia weight must be > 0.");
    if(InpCarryModel != FXRC_CARRY_MODEL_BROKER_SWAP
-      && InpCarryModel != FXRC_CARRY_MODEL_RATE_DIFF)
+      && InpCarryModel != FXRC_CARRY_MODEL_RATE_DIFF
+      && InpCarryModel != FXRC_CARRY_MODEL_FORWARD_POINTS_CSV
+      && InpCarryModel != FXRC_CARRY_MODEL_HYBRID_BEST_AVAILABLE)
    {
       return FailInputValidation("InpCarryModel is invalid.");
    }
@@ -845,6 +867,20 @@ bool ValidatePremiaInputs()
    }
    if(InpCarryMaxDataAgeDays <= 0 || InpCarryReloadHours <= 0)
       return FailInputValidation("Carry cache freshness inputs must be > 0.");
+   if(InpUseForwardPointsCarry
+      && (StringLen(InpForwardPointsFile) == 0 || InpForwardPointsMaxStaleDays <= 0))
+   {
+      return FailInputValidation("Forward-points carry inputs are invalid.");
+   }
+   if(InpCarryModel == FXRC_CARRY_MODEL_FORWARD_POINTS_CSV
+      && !InpUseForwardPointsCarry
+      && !InpCarryFallbackToRateDifferential
+      && !InpCarryFallbackToBrokerSwap)
+   {
+      return FailInputValidation(
+         "Forward-points carry model requires forward data or an enabled fallback."
+      );
+   }
    if(InpValueLookbackBars < 30
       || InpValueHalfLifeBars <= 1
       || InpValueHalfLifeBars >= InpValueLookbackBars)
@@ -1015,6 +1051,65 @@ bool ValidateAdaptiveOverlayInputs()
           || InpExecQualityNewsMinutesAfter < 0))
    {
       return FailInputValidation("Execution quality governor inputs are invalid.");
+   }
+
+   if(InpUseCrossSectionalMomentum
+      && (InpXMomLookback1 <= 1
+          || InpXMomLookback2 <= 1
+          || InpXMomLookback3 <= 1
+          || InpXMomWeight1 < 0.0
+          || InpXMomWeight2 < 0.0
+          || InpXMomWeight3 < 0.0
+          || (InpXMomWeight1 + InpXMomWeight2 + InpXMomWeight3) <= EPS()
+          || InpXMomTanhScale <= 0.0
+          || InpXMomMinSymbols < 2.0
+          || InpXMomRidgeLambda < 0.0))
+   {
+      return FailInputValidation("Cross-sectional momentum inputs are invalid.");
+   }
+
+   if(InpUseMediumTermTrend
+      && (InpMediumTrendTF1Lookback1 <= 1
+          || InpMediumTrendTF1Lookback2 <= 1
+          || InpMediumTrendTF1Lookback3 <= 1
+          || InpMediumTrendTF2Lookback1 <= 1
+          || InpMediumTrendTF2Lookback2 <= 1
+          || InpMediumTrendTF2Lookback3 <= 1
+          || InpMediumTrendTF1Weight < 0.0
+          || InpMediumTrendTF2Weight < 0.0
+          || (InpMediumTrendTF1Weight + InpMediumTrendTF2Weight) <= EPS()
+          || InpMediumTrendTanhScale <= 0.0
+          || InpMediumTrendAlignmentPenalty < 0.0
+          || InpMediumTrendAlignmentPenalty > 1.0))
+   {
+      return FailInputValidation("Medium-term trend inputs are invalid.");
+   }
+
+   if(InpUseResearchFeatureExport
+      && (StringLen(InpResearchExportFile) == 0 || InpResearchExportSchemaVersion <= 0))
+   {
+      return FailInputValidation("Research feature export inputs are invalid.");
+   }
+
+   if(InpUseProbabilityModel
+      && (StringLen(InpProbabilityModelFile) == 0
+          || InpProbabilityHorizonDays <= 0
+          || InpProbabilityMinEdge < 0.0
+          || InpProbabilityMinRiskScale < 0.0
+          || InpProbabilityMaxRiskScale < InpProbabilityMinRiskScale))
+   {
+      return FailInputValidation("Probability model inputs are invalid.");
+   }
+
+   if(InpUseRegimeStateFilter
+      && (InpRegimeStressBlockThreshold < 0.0
+          || InpRegimeStressBlockThreshold > 1.0
+          || InpRegimeCarryStressPenalty < 0.0
+          || InpRegimeCarryStressPenalty > 1.0
+          || InpRegimeTrendChopPenalty < 0.0
+          || InpRegimeTrendChopPenalty > 1.0))
+   {
+      return FailInputValidation("Regime state filter inputs are invalid.");
    }
 
    return true;
@@ -1724,15 +1819,49 @@ bool ValueSignalRequiresPPPData()
 // Returns whether carry signal requires external data.
 bool CarrySignalRequiresExternalData()
 {
-   return (CarrySleeveEnabled()
-        && InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF
-        && !InpCarryAllowBrokerFallback);
+   if(!CarrySleeveEnabled())
+      return false;
+
+   if(InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF)
+      return !InpCarryAllowBrokerFallback;
+
+   if(InpCarryModel == FXRC_CARRY_MODEL_FORWARD_POINTS_CSV)
+      return (!InpCarryFallbackToRateDifferential && !InpCarryFallbackToBrokerSwap);
+
+   if(InpCarryModel == FXRC_CARRY_MODEL_HYBRID_BEST_AVAILABLE)
+      return (
+         InpUseForwardPointsCarry
+         && !InpCarryFallbackToRateDifferential
+         && !InpCarryFallbackToBrokerSwap
+      );
+
+   return false;
 }
 
 // Returns whether carry model uses external.
 bool CarryModelUsesExternal()
 {
-   return (CarrySleeveEnabled() && InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF);
+   return (
+      CarrySleeveEnabled()
+      && (InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF
+          || InpCarryModel == FXRC_CARRY_MODEL_FORWARD_POINTS_CSV
+          || InpCarryModel == FXRC_CARRY_MODEL_HYBRID_BEST_AVAILABLE)
+   );
+}
+
+// Returns whether the carry path needs the startup-built rate-differential cache.
+bool CarryModelUsesRateDifferentialData()
+{
+   if(!CarrySleeveEnabled())
+      return false;
+   if(InpCarryModel == FXRC_CARRY_MODEL_RATE_DIFF)
+      return true;
+   if(InpCarryModel == FXRC_CARRY_MODEL_FORWARD_POINTS_CSV)
+      return InpCarryFallbackToRateDifferential;
+   if(InpCarryModel == FXRC_CARRY_MODEL_HYBRID_BEST_AVAILABLE)
+      return InpCarryFallbackToRateDifferential;
+
+   return false;
 }
 
 // Returns whether value model uses PPP.

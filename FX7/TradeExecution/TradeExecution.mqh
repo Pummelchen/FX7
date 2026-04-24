@@ -199,6 +199,23 @@ bool BuildTradePlan(const int symbol_idx,
    }
    target_volume *= meta_multiplier;
 
+   double probability_multiplier = FXRCProbabilityRiskMultiplierForEntry(symbol_idx, dir);
+   if(probability_multiplier <= EPS())
+   {
+      reason = "probability model reduced target risk to zero";
+      return false;
+   }
+   if(probability_multiplier < 0.99)
+   {
+      PrintFormat(
+         "Probability model reduced %s %s risk multiplier to %.2f.",
+         symbol,
+         (dir > 0 ? "long" : "short"),
+         probability_multiplier
+      );
+   }
+   target_volume *= probability_multiplier;
+
    string execution_quality_reason = "";
    double execution_quality_multiplier = FXRCExecutionQualityRiskMultiplier(
       symbol_idx,

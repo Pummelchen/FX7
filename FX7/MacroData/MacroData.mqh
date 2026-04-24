@@ -277,7 +277,7 @@ bool LoadPPPDataCache(const bool force_log)
 // Ensures carry data cache.
 bool EnsureCarryDataCache(const bool force_log)
 {
-   if(!CarryModelUsesExternal())
+   if(!CarryModelUsesRateDifferentialData())
       return true;
 
    datetime now = SafeNow();

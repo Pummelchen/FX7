@@ -369,6 +369,19 @@ bool BuildCandidateRecord(const int idx, FXRCCandidate &candidate)
    candidate.exec_gate = DirectionalExecGate(idx, candidate.dir);
    candidate.novelty_rank = g_Rank[idx];
 
+   if(!FXRCApplyProbabilityModelToCandidate(candidate))
+      return false;
+
+   if(InpProbabilityReplaceRawConfidence && InpUseProbabilityModel)
+   {
+      double directional_probability = (
+         candidate.dir > 0
+         ? g_probability_p_up[idx]
+         : 1.0 - g_probability_p_up[idx]
+      );
+      candidate.confidence = Clip(directional_probability, 0.0, 1.0);
+   }
+
    if(!FXRCApplyMetaAllocationToCandidate(candidate))
       return false;
 
@@ -427,6 +440,8 @@ bool CandidateMeetsMinimumGates(const int idx, const int dir = 0)
    double conf_floor = InpMinConfidence;
    double regime_floor = InpMinRegimeGate;
    double exec_floor = InpMinExecGate;
+   if(FXRCRegimeStateBlocksEntry(idx))
+      return false;
 
    return (g_Conf[idx] >= conf_floor
         && g_G[idx] >= regime_floor
