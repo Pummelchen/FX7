@@ -133,6 +133,24 @@ struct FXRCProbabilityDecision
    string reason;
 };
 
+struct FXRCAdaptiveCalibrationState
+{
+   bool   attempted;
+   bool   applied;
+   int    sample_count;
+   int    tradable_symbols;
+   double target_trades_per_day;
+   double learned_abs_score_threshold;
+   double entry_threshold_multiplier;
+   double exit_threshold_multiplier;
+   double reversal_threshold_multiplier;
+   double min_confidence_floor;
+   double weight_momentum;
+   double weight_carry;
+   double weight_value;
+   string reason;
+};
+
 //------------------------- Globals ----------------------------------//
 string   g_symbols[];
 bool     g_trade_allowed[];
@@ -207,6 +225,7 @@ double   g_universe_stdret_hist[];
 double   g_w1 = 0.45;
 double   g_w2 = 0.35;
 double   g_w3 = 0.20;
+FXRCAdaptiveCalibrationState g_adaptive_calibration;
 double   g_reference_eur_notional = 0.0;
 double   g_session_start_equity_usd = 0.0;
 double   g_equi_max = 0.0;

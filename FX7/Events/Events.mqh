@@ -9,6 +9,7 @@ void ResetStartupState()
    ResetPPPCacheState(g_ppp_cache);
    FXRCClearForwardPointsCache();
    FXRCClearProbabilityModel();
+   FXRCResetAdaptiveCalibrationState();
    g_research_export_header_checked = false;
    g_research_export_last_bar_time = 0;
 }
@@ -415,6 +416,7 @@ int FX7HandleInit()
    }
    LogStartupStep(6, total_steps, "Initialize tradable filter", "Done");
 
+   FXRCRunAdaptiveStartupCalibration();
    FXRCLogCrossSectionalMomentumStartup();
    if(InpUseForwardPointsCarry)
    {

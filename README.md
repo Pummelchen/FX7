@@ -28,6 +28,7 @@
 - `FX7/MetaAllocation/MetaAllocation.mqh`: optional realized-R context learner and candidate/risk scaler
 - `FX7/CurrencyExposure/CurrencyExposure.mqh`: optional currency-factor exposure vector and concentration limiter
 - `FX7/ExecutionQuality/ExecutionQuality.mqh`: optional spread, rollover, quote-stability, and news blackout governor
+- `FX7/AdaptiveStartupTuning/AdaptiveStartupTuning.mqh`: startup profile learner that calibrates trade-frequency thresholds, confidence floor, turnover, and sleeve weights from closed-bar history
 - `FX7/CrossSectionalMomentum/CrossSectionalMomentum.mqh`: optional latent currency-strength momentum sleeve
 - `FX7/MediumTermTrend/MediumTermTrend.mqh`: optional H4/D1 closed-bar trend sleeve for 1-day and 1-week context
 - `FX7/ResearchExport/ResearchExport.mqh`: optional ex-ante feature snapshot export for offline validation
@@ -68,6 +69,38 @@ Built-in carry/PPP fallback profiles are a safety net, not a substitute for cale
 
 `InpMaxAccountOrders` is enforced against all currently open account positions plus pending orders, not just FX7-owned trades.
 
+## Strategy Profile And Startup Learning
+
+FX7 now starts in `FXRC_PROFILE_ACTIVE` with `InpUseStartupAutoCalibration=true`. At initialization the EA scans recent closed bars across the tradable universe and calibrates a bounded operating profile:
+
+- entry-threshold multiplier
+- exit-threshold multiplier
+- reversal-threshold multiplier
+- minimum confidence floor
+- effective momentum/carry/value sleeve weights
+
+The startup learner is intentionally unsupervised. It calibrates opportunity supply and trade-frequency pressure from historical score distributions; it does not train on future returns or claim profitability. The default active profile tilts the live model toward faster momentum-driven trading and sets carry/value weights to zero, which also avoids slow macro dependencies unless the user selects a slower profile or disables auto-calibration.
+
+Useful controls:
+
+```text
+InpStrategyProfile=FXRC_PROFILE_ACTIVE
+InpUseStartupAutoCalibration=true
+InpTargetTradesPerDay=6.0
+InpCalibrationLookbackDays=90
+```
+
+Profiles:
+
+- `FXRC_PROFILE_CONSERVATIVE`: closest to static multi-premia behavior.
+- `FXRC_PROFILE_BALANCED`: moderate threshold relaxation and lighter macro sleeve use.
+- `FXRC_PROFILE_ACTIVE`: higher trade-frequency target, lower confidence floor, faster exits, momentum-only sleeve mix.
+- `FXRC_PROFILE_RESEARCH`: broad opportunity capture for research and diagnostics.
+
+The learner cannot bypass hard safety controls. If `InpMaxAccountOrders`, `InpMaxAcceptedSignals`, portfolio risk, margin, exposure, broker minimum volume, dependency shutdown, or execution checks block entries, those blocks still dominate. For materially higher realized trade counts, `InpMaxAccountOrders` and risk/exposure budgets must be consistent with the requested target trade rate.
+
+Set `InpUseStartupAutoCalibration=false` to return to static input behavior.
+
 ## Optional Adaptive Overlays
 
 FX7 includes three disabled-by-default overlays that can scale, suppress, throttle, or conservatively reweight already-qualified candidates. They do not create signals and they do not bypass hard stops, dependency policy, account caps, margin/risk limits, protective stops, or trade verification.
@@ -88,7 +121,7 @@ FX7 also includes disabled-by-default research components for transparent direct
 - Probability model: `InpUseProbabilityModel` consumes offline-trained logistic coefficients and can block or scale already-qualified candidates using calibrated `P(UP)`.
 - Regime state: `InpUseRegimeStateFilter` computes transparent trend/chop/stress probabilities and can remain feature-only or conservatively gate sleeves.
 
-The live EA remains closed-bar and auditable. It does not train models, compute labels, or use future returns in the signal path.
+The live EA remains closed-bar and auditable. It does not train supervised prediction models, compute labels, or use future returns in the signal path.
 
 Offline Python research tooling is in `research/` and requires:
 
@@ -114,6 +147,7 @@ Copy the full `FX7` folder into `MQL5/Experts/FX7/` so MetaEditor can resolve `F
 - [Live Trader Guide](https://github.com/Pummelchen/FX7/wiki/Live-Trader)
 - [Backtester Guide](https://github.com/Pummelchen/FX7/wiki/Backtester)
 - [Research Extensions](docs/FX7_RESEARCH_EXTENSIONS.md)
+- [Adaptive Startup Tuning](docs/FX7_ADAPTIVE_STARTUP_TUNING.md)
 - [Probability Model](docs/FX7_PROBABILITY_MODEL.md)
 - [Cross-Sectional Momentum](docs/FX7_CROSS_SECTIONAL_MOMENTUM.md)
 - [Validation Protocol](docs/FX7_VALIDATION_PROTOCOL.md)

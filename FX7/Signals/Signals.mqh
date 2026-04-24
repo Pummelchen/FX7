@@ -359,7 +359,9 @@ bool CandidatePassesReversalThreshold(const int idx, const int target_dir)
    if(current_dir == 0 || current_dir == target_dir)
       return true;
 
-   return (MathAbs(g_S[idx]) + EPS() >= InpReversalThreshold);
+   double reversal_threshold = InpReversalThreshold
+                             * FXRCAdaptiveReversalThresholdMultiplier();
+   return (MathAbs(g_S[idx]) + EPS() >= reversal_threshold);
 }
 
 // Sorts candidate records.
@@ -463,8 +465,10 @@ bool BuildSignalDirection(const int idx, int &dir)
    if(idx < 0 || idx >= g_num_symbols || !g_symbol_data_ok[idx] || IsSymbolDataStale(idx))
       return false;
 
-   double long_threshold = MathMax(BuildEntryThresholdDirectional(idx, 1), InpBaseEntryThreshold);
-   double short_threshold = MathMax(BuildEntryThresholdDirectional(idx, -1), InpBaseEntryThreshold);
+   double effective_base_threshold = InpBaseEntryThreshold
+                                   * FXRCAdaptiveEntryThresholdMultiplier();
+   double long_threshold = MathMax(BuildEntryThresholdDirectional(idx, 1), effective_base_threshold);
+   double short_threshold = MathMax(BuildEntryThresholdDirectional(idx, -1), effective_base_threshold);
 
    if(g_S[idx] >= long_threshold && InpAllowLong)
       dir = 1;
@@ -496,7 +500,7 @@ bool CandidateMeetsMinimumGates(const int idx, const int dir = 0)
    if(idx < 0 || idx >= g_num_symbols || !g_symbol_data_ok[idx] || IsSymbolDataStale(idx))
       return false;
 
-   double conf_floor = InpMinConfidence;
+   double conf_floor = FXRCAdaptiveMinConfidenceFloor();
    double regime_floor = InpMinRegimeGate;
    double exec_floor = InpMinExecGate;
    if(FXRCRegimeStateBlocksEntry(idx))
@@ -532,8 +536,9 @@ double BuildExitThreshold(const int idx)
 // Builds exit threshold directional.
 double BuildExitThresholdDirectional(const int idx, const int dir)
 {
-   return InpBaseExitThreshold
-        + 0.10 * InpEtaCost * DirectionalCostPenaltyTerm(idx, dir);
+   double raw_threshold = InpBaseExitThreshold
+                        + 0.10 * InpEtaCost * DirectionalCostPenaltyTerm(idx, dir);
+   return raw_threshold * FXRCAdaptiveExitThresholdMultiplier();
 }
 
 // Builds entry threshold.
@@ -547,10 +552,11 @@ double BuildEntryThreshold(const int idx)
 // Builds entry threshold directional.
 double BuildEntryThresholdDirectional(const int idx, const int dir)
 {
-   return InpBaseEntryThreshold
-        + 0.20 * InpEtaCost * DirectionalCostPenaltyTerm(idx, dir)
-        + 0.20 * InpEtaVol * RegimePenaltyTerm(idx)
-        + 0.10 * InpEtaBreakout * (1.0 - Clip(g_BK[idx], 0.0, 1.0));
+   double raw_threshold = InpBaseEntryThreshold
+                        + 0.20 * InpEtaCost * DirectionalCostPenaltyTerm(idx, dir)
+                        + 0.20 * InpEtaVol * RegimePenaltyTerm(idx)
+                        + 0.10 * InpEtaBreakout * (1.0 - Clip(g_BK[idx], 0.0, 1.0));
+   return raw_threshold * FXRCAdaptiveEntryThresholdMultiplier();
 }
 
 // Builds signal confidence.

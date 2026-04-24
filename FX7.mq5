@@ -11,6 +11,7 @@
 #include "FX7/MetaAllocation/MetaAllocation.mqh"
 #include "FX7/CurrencyExposure/CurrencyExposure.mqh"
 #include "FX7/ExecutionQuality/ExecutionQuality.mqh"
+#include "FX7/AdaptiveStartupTuning/AdaptiveStartupTuning.mqh"
 #include "FX7/CrossSectionalMomentum/CrossSectionalMomentum.mqh"
 #include "FX7/MediumTermTrend/MediumTermTrend.mqh"
 #include "FX7/ResearchExport/ResearchExport.mqh"

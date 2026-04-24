@@ -607,9 +607,9 @@ void FXRCRebuildCompositePremiaAlphaForCycle()
 // Computes composite allocator weights.
 void ComputeCompositeAllocatorWeights(const int idx, double &w_m, double &w_c, double &w_v)
 {
-   w_m = InpWeightMomentum;
-   w_c = InpWeightCarry;
-   w_v = InpWeightValue;
+   w_m = FXRCAdaptiveMomentumWeight();
+   w_c = FXRCAdaptiveCarryWeight();
+   w_v = FXRCAdaptiveValueWeight();
    NormalizePremiaWeights(w_m, w_c, w_v);
 
    if(!InpUseDynamicAllocator)

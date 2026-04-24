@@ -848,10 +848,37 @@ bool ValidatePremiaInputs()
       return FailInputValidation("InpMagicNumber must be > 0.");
    if(InpMaxAcceptedSignals <= 0)
       return FailInputValidation("InpMaxAcceptedSignals must be > 0.");
+   if(InpStrategyProfile != FXRC_PROFILE_CONSERVATIVE
+      && InpStrategyProfile != FXRC_PROFILE_BALANCED
+      && InpStrategyProfile != FXRC_PROFILE_ACTIVE
+      && InpStrategyProfile != FXRC_PROFILE_RESEARCH)
+   {
+      return FailInputValidation("InpStrategyProfile is invalid.");
+   }
+   if(InpUseStartupAutoCalibration)
+   {
+      if(InpTargetTradesPerDay < 0.0
+         || InpCalibrationLookbackDays <= 0
+         || InpCalibrationMinSamples <= 0)
+      {
+         return FailInputValidation("Startup auto-calibration sample inputs are invalid.");
+      }
+      if(InpCalibrationMinEntryThresholdMultiplier <= 0.0
+         || InpCalibrationMaxEntryThresholdMultiplier < InpCalibrationMinEntryThresholdMultiplier
+         || InpCalibrationMinConfidenceFloor < 0.0
+         || InpCalibrationMaxConfidenceFloor > 1.0
+         || InpCalibrationMaxConfidenceFloor < InpCalibrationMinConfidenceFloor)
+      {
+         return FailInputValidation("Startup auto-calibration bounds are invalid.");
+      }
+   }
    if(InpWeightMomentum < 0.0 || InpWeightCarry < 0.0 || InpWeightValue < 0.0)
       return FailInputValidation("Premia weights must be >= 0.");
-   if((InpWeightMomentum + InpWeightCarry + InpWeightValue) <= EPS())
+   if((InpWeightMomentum + InpWeightCarry + InpWeightValue) <= EPS()
+      && !InpUseStartupAutoCalibration)
+   {
       return FailInputValidation("At least one premia weight must be > 0.");
+   }
    if(InpCarryModel != FXRC_CARRY_MODEL_BROKER_SWAP
       && InpCarryModel != FXRC_CARRY_MODEL_RATE_DIFF
       && InpCarryModel != FXRC_CARRY_MODEL_FORWARD_POINTS_CSV
@@ -1796,13 +1823,13 @@ bool IsClassicTradeModel()
 // Returns whether the carry sleeve is enabled.
 bool CarrySleeveEnabled()
 {
-   return (InpWeightCarry > EPS());
+   return (FXRCAdaptiveCarryWeight() > EPS());
 }
 
 // Returns whether the value sleeve is enabled.
 bool ValueSleeveEnabled()
 {
-   return (InpWeightValue > EPS());
+   return (FXRCAdaptiveValueWeight() > EPS());
 }
 
 // Returns whether value signal requires PPP data.

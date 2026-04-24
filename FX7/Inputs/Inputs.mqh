@@ -12,6 +12,25 @@ input bool               InpAllowShort                = true;
 input int                InpMaxAcceptedSignals        = 5;
 input int                InpMaxAccountOrders          = 5;
 
+enum ENUM_FXRC_STRATEGY_PROFILE
+{
+   FXRC_PROFILE_CONSERVATIVE = 0,
+   FXRC_PROFILE_BALANCED = 1,
+   FXRC_PROFILE_ACTIVE = 2,
+   FXRC_PROFILE_RESEARCH = 3
+};
+
+input group "=== Strategy Profile / Startup Learning ==="
+input ENUM_FXRC_STRATEGY_PROFILE InpStrategyProfile   = FXRC_PROFILE_ACTIVE;
+input bool               InpUseStartupAutoCalibration = true;
+input double             InpTargetTradesPerDay        = 6.0;
+input int                InpCalibrationLookbackDays   = 90;
+input int                InpCalibrationMinSamples     = 500;
+input double             InpCalibrationMinEntryThresholdMultiplier = 0.25;
+input double             InpCalibrationMaxEntryThresholdMultiplier = 1.00;
+input double             InpCalibrationMinConfidenceFloor = 0.05;
+input double             InpCalibrationMaxConfidenceFloor = 0.30;
+
 input group "=== FX Premia Composite ==="
 input double             InpWeightMomentum            = 0.50;
 input double             InpWeightCarry               = 0.25;
