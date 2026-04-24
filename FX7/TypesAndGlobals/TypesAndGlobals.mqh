@@ -40,6 +40,69 @@ struct FXRCCarryCacheState
    string   reason;
 };
 
+struct FXRCMetaBucketStats
+{
+   string   key;
+   string   parent_key;
+   int      samples;
+   double   ewma_r;
+   double   ewma_abs_r;
+   double   ewma_r2;
+   datetime last_update_time;
+};
+
+struct FXRCMetaDecision
+{
+   bool   allow_entry;
+   double risk_multiplier;
+   double priority_multiplier;
+   double momentum_multiplier;
+   double carry_multiplier;
+   double value_multiplier;
+   string context_key;
+   string reason;
+};
+
+struct FXRCMetaOpenContext
+{
+   string   symbol;
+   long     position_id;
+   int      symbol_idx;
+   int      dir;
+   double   entry_risk_cash;
+   double   entry_volume;
+   double   remaining_risk_cash;
+   double   remaining_volume;
+   double   entry_price;
+   string   context_key;
+   string   symbol_key;
+   string   symbol_dir_key;
+   string   session_key;
+   string   regime_session_key;
+   datetime entry_time;
+};
+
+struct FXRCCurrencyExposure
+{
+   string currency;
+   double net_eur;
+   double gross_eur;
+};
+
+struct FXRCCurrencyExposureCheck
+{
+   bool   allowed;
+   double max_allowed_volume;
+   string reason;
+};
+
+struct FXRCExecutionQualityDecision
+{
+   bool   allow_entry;
+   double risk_multiplier;
+   string reason;
+};
+
 //------------------------- Globals ----------------------------------//
 string   g_symbols[];
 bool     g_trade_allowed[];
@@ -137,6 +200,24 @@ int      g_ppp_index_start[];
 int      g_ppp_index_count[];
 FXRCPPPCacheState g_ppp_cache;
 
+FXRCMetaBucketStats g_meta_stats[];
+FXRCMetaOpenContext g_meta_open_contexts[];
+double   g_meta_entry_risk_multiplier[];
+double   g_meta_entry_priority_multiplier[];
+string   g_meta_entry_context_key[];
+string   g_meta_entry_reason[];
+bool     g_meta_stats_dirty = false;
+datetime g_meta_last_flush_time = 0;
+
+double   g_exec_quality_spread_samples[];
+int      g_exec_quality_sample_count[];
+int      g_exec_quality_next_slot[];
+double   g_exec_quality_last_bid[];
+double   g_exec_quality_last_ask[];
+double   g_exec_quality_last_spread_points[];
+datetime g_exec_quality_last_quote_time[];
+datetime g_exec_quality_stable_since[];
+
 struct FXRCTradePlan
 {
    string symbol;
@@ -151,6 +232,8 @@ struct FXRCTradePlan
    double sizing_score;
    double volatility_multiplier;
    double covariance_multiplier;
+   double meta_risk_multiplier;
+   double execution_quality_multiplier;
 };
 
 struct FXRCCandidate
@@ -239,4 +322,3 @@ bool     g_execution_state_dirty = false;
 // 4. Signal construction and portfolio selection
 // 5. Feature pipeline and external data layers
 // 6. Pricing, startup, and core helpers
-

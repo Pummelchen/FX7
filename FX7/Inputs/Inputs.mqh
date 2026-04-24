@@ -105,6 +105,23 @@ input double             InpModernVolAdjustMax      = 1.60;
 input double             InpModernCovariancePenaltyFloor = 0.50;
 input double             InpModernForecastRiskATRScale   = 1.00;
 
+input group "=== Meta Allocation Overlay ==="
+input bool               InpUseMetaAllocator        = false;
+input bool               InpMetaPersistStats        = true;
+input int                InpMetaMinSamplesForThrottle = 25;
+input int                InpMetaMinSamplesForBoost  = 50;
+input int                InpMetaUpdateHalfLifeTrades = 250;
+input double             InpMetaPriorWeight         = 30.0;
+input double             InpMetaMinRiskMultiplier   = 0.0;
+input double             InpMetaMaxRiskMultiplier   = 1.50;
+input double             InpMetaNeutralRiskMultiplier = 1.0;
+input double             InpMetaBadContextMultiplier = 0.50;
+input double             InpMetaBlockBelowR         = -0.15;
+input double             InpMetaBoostAboveR         = 0.10;
+input double             InpMetaGain                = 0.75;
+input double             InpMetaConservativeZ       = 0.75;
+input int                InpMetaStatsFlushMinutes   = 10;
+
 input group "=== Risk / Execution ==="
 input long               InpMagicNumber              = 420004;
 input double             InpClassicReferenceEURUSDLots       = 0.01;
@@ -128,6 +145,26 @@ input int                InpPersistenceBars           = 1;
 input int                InpSlippagePoints            = 20;
 input int                InpTradeRetryCount           = 2;
 input int                InpTradeVerifyAttempts       = 3;
+
+input group "=== Currency Factor Exposure Control ==="
+input bool               InpUseCurrencyFactorExposureControl = false;
+input double             InpMaxNetSingleCurrencyExposurePct = 75.0;
+input double             InpMaxGrossSingleCurrencyExposurePct = 125.0;
+input double             InpMaxCurrencyBlocNetExposurePct = 150.0;
+input double             InpMaxCurrencyFactorConcentrationPct = 65.0;
+input bool               InpCurrencyExposureIncludeForeignPositions = false;
+
+input group "=== Execution Quality Governor ==="
+input bool               InpUseExecutionQualityGovernor = false;
+input int                InpExecQualitySpreadLookbackSamples = 256;
+input double             InpExecQualityMaxSpreadPercentile = 0.90;
+input double             InpExecQualityAbnormalSpreadMultiple = 2.50;
+input int                InpExecQualityStableQuoteSeconds = 3;
+input int                InpExecQualityRolloverSkipMinutes = 10;
+input double             InpExecQualityElevatedCostRiskMultiplier = 0.50;
+input bool               InpExecQualityUseCalendarBlackout = false;
+input int                InpExecQualityNewsMinutesBefore = 15;
+input int                InpExecQualityNewsMinutesAfter = 15;
 
 input group "=== Dependency Failure Policy ==="
 input bool               InpFreezeEntriesOnDependencyFailure = true;

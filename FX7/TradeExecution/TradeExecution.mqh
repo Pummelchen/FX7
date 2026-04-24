@@ -16,7 +16,7 @@ bool OpenManagedPosition(const int symbol_idx,
    PrintFormat(
       "FXRC %s entry plan on %s: volume=%.2f risk=%.2f cash "
       + "notional=%.2f EUR target_risk=%.3f%% score=%.3f "
-      + "vol_mult=%.3f cov_mult=%.3f",
+      + "vol_mult=%.3f cov_mult=%.3f meta_mult=%.3f exec_mult=%.3f",
       EnumToString(Trade_Model),
       symbol,
       plan.volume,
@@ -25,7 +25,9 @@ bool OpenManagedPosition(const int symbol_idx,
       plan.target_risk_pct,
       plan.sizing_score,
       plan.volatility_multiplier,
-      plan.covariance_multiplier
+      plan.covariance_multiplier,
+      plan.meta_risk_multiplier,
+      plan.execution_quality_multiplier
    );
 
    ENUM_ORDER_TYPE_FILLING filling;
@@ -54,6 +56,7 @@ bool OpenManagedPosition(const int symbol_idx,
    if(!SendTradeRequestWithRetry(request, "entry", true, result))
       return false;
 
+   FXRCRegisterMetaOpenContextFromPlan(symbol_idx, dir, plan, result);
    QueueManagedStateVerification(symbol, dir, "entry");
    ProcessPendingTradeVerifications(true);
 
@@ -187,6 +190,49 @@ bool BuildTradePlan(const int symbol_idx,
       return false;
    }
 
+   double meta_multiplier = FXRCMetaRiskMultiplierForEntry(symbol_idx, dir);
+   plan.meta_risk_multiplier = meta_multiplier;
+   if(meta_multiplier <= EPS())
+   {
+      reason = "meta allocator reduced target risk to zero";
+      return false;
+   }
+   target_volume *= meta_multiplier;
+
+   string execution_quality_reason = "";
+   double execution_quality_multiplier = FXRCExecutionQualityRiskMultiplier(
+      symbol_idx,
+      dir,
+      execution_quality_reason
+   );
+   plan.execution_quality_multiplier = execution_quality_multiplier;
+   if(execution_quality_multiplier <= EPS())
+   {
+      reason = (
+         StringLen(execution_quality_reason) > 0
+         ? "execution quality blocked entry: " + execution_quality_reason
+         : "execution quality blocked entry"
+      );
+      return false;
+   }
+   if(execution_quality_multiplier < 0.99 && StringLen(execution_quality_reason) > 0)
+   {
+      PrintFormat(
+         "Execution quality reduced %s %s risk multiplier to %.2f: %s.",
+         symbol,
+         (dir > 0 ? "long" : "short"),
+         execution_quality_multiplier,
+         execution_quality_reason
+      );
+   }
+   target_volume *= execution_quality_multiplier;
+
+   if(target_volume <= 0.0)
+   {
+      reason = "overlay-adjusted target volume <= 0";
+      return false;
+   }
+
    double cap_volume = target_volume;
 
    double per_trade_risk_cash = equity * InpRiskPerTradePct / 100.0;
@@ -236,6 +282,18 @@ bool BuildTradePlan(const int symbol_idx,
          return false;
       }
       cap_volume = MathMin(cap_volume, margin_room_cash / margin_per_lot);
+   }
+
+   string currency_exposure_reason = "";
+   if(!FXRCLimitVolumeByCurrencyExposure(
+      symbol_idx,
+      dir,
+      plan.entry_price,
+      cap_volume,
+      currency_exposure_reason))
+   {
+      reason = currency_exposure_reason;
+      return false;
    }
 
    double normalized = NormalizeVolume(symbol, cap_volume);

@@ -369,6 +369,9 @@ bool BuildCandidateRecord(const int idx, FXRCCandidate &candidate)
    candidate.exec_gate = DirectionalExecGate(idx, candidate.dir);
    candidate.novelty_rank = g_Rank[idx];
 
+   if(!FXRCApplyMetaAllocationToCandidate(candidate))
+      return false;
+
    return (candidate.priority > EPS());
 }
 

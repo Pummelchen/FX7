@@ -673,6 +673,8 @@ bool InitArrays()
       ResetSymbolExecutionState(g_exec_symbol_state[i]);
    }
 
+   FXRCInitMetaAllocatorState();
+   FXRCInitExecutionQualityState();
    return true;
 }
 
@@ -963,6 +965,61 @@ bool ValidateRiskAndModelInputs()
    return true;
 }
 
+// Validates optional adaptive overlay inputs.
+bool ValidateAdaptiveOverlayInputs()
+{
+   if(InpUseMetaAllocator
+      && (InpMetaMinSamplesForThrottle < 0
+          || InpMetaMinSamplesForBoost < 0
+          || InpMetaUpdateHalfLifeTrades <= 0
+          || InpMetaPriorWeight < 0.0
+          || InpMetaStatsFlushMinutes <= 0))
+   {
+      return FailInputValidation("Meta allocator sample and persistence inputs are invalid.");
+   }
+   if(InpUseMetaAllocator
+      && (InpMetaMinRiskMultiplier < 0.0
+          || InpMetaBadContextMultiplier < 0.0
+          || InpMetaNeutralRiskMultiplier < 0.0
+          || InpMetaNeutralRiskMultiplier < InpMetaMinRiskMultiplier
+          || InpMetaBadContextMultiplier < InpMetaMinRiskMultiplier
+          || InpMetaBadContextMultiplier > InpMetaNeutralRiskMultiplier
+          || InpMetaMaxRiskMultiplier < InpMetaNeutralRiskMultiplier
+          || InpMetaMaxRiskMultiplier < InpMetaMinRiskMultiplier))
+   {
+      return FailInputValidation("Meta allocator risk multipliers are invalid.");
+   }
+   if(InpUseMetaAllocator && InpMetaConservativeZ < 0.0)
+      return FailInputValidation("InpMetaConservativeZ must be >= 0.");
+
+   if(InpUseCurrencyFactorExposureControl
+      && (InpMaxNetSingleCurrencyExposurePct < 0.0
+          || InpMaxGrossSingleCurrencyExposurePct < 0.0
+          || InpMaxCurrencyBlocNetExposurePct < 0.0
+          || InpMaxCurrencyFactorConcentrationPct < 0.0
+          || InpMaxCurrencyFactorConcentrationPct > 100.0))
+   {
+      return FailInputValidation("Currency factor exposure limits are invalid.");
+   }
+
+   if(InpUseExecutionQualityGovernor
+      && (InpExecQualitySpreadLookbackSamples < 20
+          || InpExecQualityMaxSpreadPercentile <= 0.0
+          || InpExecQualityMaxSpreadPercentile >= 1.0
+          || InpExecQualityAbnormalSpreadMultiple <= 1.0
+          || InpExecQualityStableQuoteSeconds < 0
+          || InpExecQualityRolloverSkipMinutes < 0
+          || InpExecQualityElevatedCostRiskMultiplier < 0.0
+          || InpExecQualityElevatedCostRiskMultiplier > 1.0
+          || InpExecQualityNewsMinutesBefore < 0
+          || InpExecQualityNewsMinutesAfter < 0))
+   {
+      return FailInputValidation("Execution quality governor inputs are invalid.");
+   }
+
+   return true;
+}
+
 // Validates classic overlay behavior and trailing configuration.
 bool ValidateClassicOverlayInputs()
 {
@@ -1088,6 +1145,7 @@ bool ValidateInputs()
       ValidatePremiaInputs()
       && ValidateSignalAndExecutionInputs()
       && ValidateRiskAndModelInputs()
+      && ValidateAdaptiveOverlayInputs()
       && ValidateClassicOverlayInputs()
       && ValidateThresholdInputs()
       && ValidateCostInputsAndTrendWeights()
@@ -1818,6 +1876,8 @@ void ResetTradePlan(FXRCTradePlan &plan)
    plan.sizing_score = 0.0;
    plan.volatility_multiplier = 1.0;
    plan.covariance_multiplier = 1.0;
+   plan.meta_risk_multiplier = 1.0;
+   plan.execution_quality_multiplier = 1.0;
 }
 
 // Resets PPP cache state.

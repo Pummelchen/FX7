@@ -8,6 +8,9 @@
 
 #include "FX7/Inputs/Inputs.mqh"
 #include "FX7/TypesAndGlobals/TypesAndGlobals.mqh"
+#include "FX7/MetaAllocation/MetaAllocation.mqh"
+#include "FX7/CurrencyExposure/CurrencyExposure.mqh"
+#include "FX7/ExecutionQuality/ExecutionQuality.mqh"
 #include "FX7/Events/Events.mqh"
 #include "FX7/TradeExecution/TradeExecution.mqh"
 #include "FX7/Signals/Signals.mqh"

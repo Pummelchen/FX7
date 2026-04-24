@@ -25,6 +25,9 @@
 - [FX7.mq5](https://github.com/Pummelchen/FX7/blob/main/FX7.mq5): thin entry wrapper that includes the modular source tree
 - `FX7/Inputs/Inputs.mqh`: all `input` parameters and public EA enums
 - `FX7/TypesAndGlobals/TypesAndGlobals.mqh`: shared structs, cache state, globals, and runtime layout notes
+- `FX7/MetaAllocation/MetaAllocation.mqh`: optional realized-R context learner and candidate/risk scaler
+- `FX7/CurrencyExposure/CurrencyExposure.mqh`: optional currency-factor exposure vector and concentration limiter
+- `FX7/ExecutionQuality/ExecutionQuality.mqh`: optional spread, rollover, quote-stability, and news blackout governor
 - `FX7/Events/Events.mqh`: `OnInit`, `OnTick`, `OnTimer`, `OnTradeTransaction`, and runtime orchestration
 - `FX7/TradeExecution/TradeExecution.mqh`: trade planning, request construction, send/retry, and verification logic
 - `FX7/Signals/Signals.mqh`: portfolio ranking, novelty, crowding, and candidate selection
@@ -53,6 +56,16 @@ If you enable carry or PPP modes for currencies that are neither covered by the 
 Built-in carry/PPP fallback profiles are a safety net, not a substitute for calendar-backed macro history. For live use, prefer calendar coverage and treat fallback-backed macro sleeves as degraded-quality inputs that deserve explicit review.
 
 `InpMaxAccountOrders` is enforced against all currently open account positions plus pending orders, not just FX7-owned trades.
+
+## Optional Adaptive Overlays
+
+FX7 includes three disabled-by-default overlays that can scale, suppress, throttle, or conservatively reweight already-qualified candidates. They do not create signals and they do not bypass hard stops, dependency policy, account caps, margin/risk limits, protective stops, or trade verification.
+
+- Meta allocator: `InpUseMetaAllocator` learns realized R-multiple by coarse context bucket and scales or blocks already-qualified candidates when recent realized edge is weak. Keep learning conservative; over-reactive settings can overfit recent noise.
+- Currency-factor exposure control: `InpUseCurrencyFactorExposureControl` converts pair trades into signed base/quote currency vectors and limits hidden EUR-equivalent concentration by single currency, bloc, and net-factor concentration.
+- Execution-quality governor: `InpUseExecutionQualityGovernor` blocks or scales down entries during rollover windows, abnormal spreads, unstable quotes, elevated execution-cost states, and optional high-impact calendar-event blackout windows.
+
+Recommended first live use is observation-heavy and conservative: enable one overlay at a time, monitor logs, and avoid aggressive meta-learning boosts until enough closed FX7-owned trades have accumulated.
 
 ## Installation
 

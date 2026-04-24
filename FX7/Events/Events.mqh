@@ -411,6 +411,8 @@ int FX7HandleInit()
    }
    LogStartupStep(6, total_steps, "Initialize tradable filter", "Done");
 
+   FXRCLoadMetaStats();
+
    if(!EnsureReferenceEURNotional())
    {
       LogStartupStep(7, total_steps, "Build EUR reference notional", "Failed");
@@ -460,6 +462,7 @@ void FX7HandleTick()
 {
    ClearConversionFailureState();
    ProcessPendingTradeVerifications(false);
+   FXRCUpdateExecutionQualitySamples();
 
    double equity = AccountInfoDouble(ACCOUNT_EQUITY);
    double equity_usd = 0.0;
@@ -561,6 +564,7 @@ void FX7HandleTick()
 // Runs the modular EA deinitialization flow.
 void FX7HandleDeinit(const int reason)
 {
+   FXRCFlushMetaStats(true);
    EventKillTimer();
    ArrayResize(g_pending_state_verifications, 0);
    g_execution_state_dirty = false;
@@ -569,7 +573,9 @@ void FX7HandleDeinit(const int reason)
 // Runs the timer-driven verification flow.
 void FX7HandleTimer()
 {
+   FXRCUpdateExecutionQualitySamples();
    ProcessPendingTradeVerifications(true);
+   FXRCFlushMetaStats(false);
 }
 
 // Processes trade-transaction callbacks in the modular runtime.
@@ -584,6 +590,7 @@ void FX7HandleTradeTransaction(const MqlTradeTransaction& trans,
    if(StringLen(symbol) == 0 || !IsForexPairSymbol(symbol))
       return;
 
+   FXRCHandleMetaTradeTransaction(trans, request, result);
    MarkExecutionStateDirty();
    MarkPendingVerificationUrgent(symbol);
    ProcessPendingTradeVerifications(true);
@@ -828,6 +835,9 @@ void TryOpenManagedTarget(const int symbol_idx,
       return;
    }
 
+   if(!FXRCExecutionQualityPreCheck(symbol_idx, target_dir))
+      return;
+
    if(OpenManagedPosition(symbol_idx, target_dir, cycle_snapshot))
       RefreshCycleExecutionState(cycle_snapshot, active_orders_total);
 }
@@ -974,6 +984,7 @@ void ExecuteModel(const bool allow_new_entries = true)
    RefreshExecutionSnapshot(cycle_snapshot);
 
    int candidates[];
+   FXRCResetMetaCycleState();
    CollectTradeCandidates(candidates);
    LogNoCandidateDiagnostic(candidates);
 
