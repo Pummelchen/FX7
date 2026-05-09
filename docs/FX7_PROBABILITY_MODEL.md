@@ -35,7 +35,7 @@ composite_raw
 
 For BUY candidates, the filter requires `p_up >= 0.5 + InpProbabilityMinEdge`. For SELL candidates, it requires `p_up <= 0.5 - InpProbabilityMinEdge`. If `InpProbabilityBlockContradiction=true`, BUYs below 0.5 and SELLs above 0.5 are blocked.
 
-Risk scaling is optional. If enabled, it maps `abs(p_up - 0.5)` into a bounded multiplier between `InpProbabilityMinRiskScale` and `InpProbabilityMaxRiskScale`. It can only scale an already-qualified candidate and remains below existing risk caps.
+Risk scaling is optional. If enabled, it maps the probability edge in the candidate direction into a bounded multiplier between `InpProbabilityMinRiskScale` and `InpProbabilityMaxRiskScale`: `p_up - 0.5` for BUY candidates and `0.5 - p_up` for SELL candidates. Contradictory probability only receives the minimum risk scale when filtering or contradiction blocking is disabled. It can only scale an already-qualified candidate and remains below existing risk caps.
 
 ## Failure Behavior
 

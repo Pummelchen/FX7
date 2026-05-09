@@ -232,8 +232,14 @@ bool ComputeForwardPointsCarrySignal(const string symbol,
    }
 
    double points = record.forward_points;
-   if(record.bid_forward_points != 0.0 || record.ask_forward_points != 0.0)
+   bool has_bid_points = (record.bid_forward_points != 0.0);
+   bool has_ask_points = (record.ask_forward_points != 0.0);
+   if(has_bid_points && has_ask_points)
       points = 0.5 * (record.bid_forward_points + record.ask_forward_points);
+   else if(has_bid_points)
+      points = record.bid_forward_points;
+   else if(has_ask_points)
+      points = record.ask_forward_points;
 
    double forward = spot + points * point;
    annual_spread_frac = ((spot - forward) / spot) * 365.0 / (double)record.tenor_days;

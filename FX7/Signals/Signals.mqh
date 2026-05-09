@@ -457,7 +457,7 @@ double BuildCandidatePriorityWithConfidence(const int idx,
    double novelty_weight = InpNoveltyFloorWeight
                          + (1.0 - InpNoveltyFloorWeight) * g_Omega[idx];
    double novelty_rank = raw_rank * MathMax(novelty_weight, 0.0);
-   double base_rank = MathMax(raw_rank, novelty_rank);
+   double base_rank = novelty_rank;
    double gate_weight = 0.50
                       + 0.25 * Clip(g_G[idx], 0.0, 1.0)
                       + 0.25 * Clip(DirectionalExecGate(idx, dir), 0.0, 1.0);

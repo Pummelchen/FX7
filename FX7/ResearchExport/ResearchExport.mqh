@@ -88,8 +88,32 @@ bool FXRCEnsureResearchExportHeader()
    bool exists = FileIsExist(InpResearchExportFile, FILE_COMMON);
    if(exists)
    {
-      g_research_export_header_checked = true;
-      return true;
+      ResetLastError();
+      int existing_handle = FileOpen(
+         InpResearchExportFile,
+         FILE_READ | FILE_CSV | FILE_COMMON,
+         ','
+      );
+      if(existing_handle != INVALID_HANDLE)
+      {
+         long existing_size = (long)FileSize(existing_handle);
+         FileClose(existing_handle);
+         if(existing_size > 0)
+         {
+            g_research_export_header_checked = true;
+            return true;
+         }
+      }
+      else
+      {
+         PrintFormat(
+            "FXRC research export skipped header inspection for existing %s err=%d.",
+            InpResearchExportFile,
+            GetLastError()
+         );
+         g_research_export_header_checked = true;
+         return true;
+      }
    }
 
    ResetLastError();
@@ -149,6 +173,23 @@ bool FXRCEnsureResearchExportHeader()
    return true;
 }
 
+// Returns a universe-level export key that changes when any tracked closed bar changes.
+string FXRCResearchExportBarKey()
+{
+   string key = "";
+   if(ArraySize(g_last_closed_bar) != g_num_symbols)
+      return key;
+
+   for(int i=0; i<g_num_symbols; ++i)
+   {
+      if(i > 0)
+         key += ";";
+      key += IntegerToString((long)g_last_closed_bar[i]);
+   }
+
+   return key;
+}
+
 // Returns a compact regime-probability export field.
 string FXRCResearchRegimeField(const int idx)
 {
@@ -179,12 +220,10 @@ void FXRCExportResearchFeatures(const int &candidates[])
    if(server_time <= 0)
       server_time = TimeCurrent();
 
-   datetime reference_bar = 0;
-   if(g_num_symbols > 0 && ArraySize(g_last_closed_bar) == g_num_symbols)
-      reference_bar = g_last_closed_bar[0];
+   string reference_key = FXRCResearchExportBarKey();
    if(!InpResearchExportFlushEveryBar
-      && reference_bar > 0
-      && g_research_export_last_bar_time == reference_bar)
+      && StringLen(reference_key) > 0
+      && g_research_export_last_bar_key == reference_key)
    {
       return;
    }
@@ -268,5 +307,5 @@ void FXRCExportResearchFeatures(const int &candidates[])
    }
 
    FileClose(handle);
-   g_research_export_last_bar_time = reference_bar;
+   g_research_export_last_bar_key = reference_key;
 }

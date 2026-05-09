@@ -270,7 +270,7 @@ double   g_probability_risk_multiplier[];
 string   g_probability_reason[];
 
 bool     g_research_export_header_checked = false;
-datetime g_research_export_last_bar_time = 0;
+string   g_research_export_last_bar_key = "";
 
 FXRCMetaBucketStats g_meta_stats[];
 FXRCMetaOpenContext g_meta_open_contexts[];

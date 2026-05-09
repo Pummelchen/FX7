@@ -276,6 +276,9 @@ def _add_cost_and_turnover_proxies(oos: pd.DataFrame, summary: dict[str, float],
             long_cost = pd.to_numeric(oos["cost_long"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
             short_cost = pd.to_numeric(oos["cost_short"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
             cost = np.where(signed > 0.0, long_cost, short_cost)
+            if "atr" in oos.columns:
+                atr = pd.to_numeric(oos["atr"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+                cost = cost * np.maximum(atr, 0.0)
         summary["cost_adjusted_return_proxy"] = float(np.mean(signed * future_return - cost))
 
 

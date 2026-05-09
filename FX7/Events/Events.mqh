@@ -11,7 +11,7 @@ void ResetStartupState()
    FXRCClearProbabilityModel();
    FXRCResetAdaptiveCalibrationState();
    g_research_export_header_checked = false;
-   g_research_export_last_bar_time = 0;
+   g_research_export_last_bar_key = "";
 }
 
 // Returns the number of symbols currently allowed to trade.
@@ -1705,7 +1705,14 @@ double PositionCommissionCash(const ulong ticket)
    if(ticket == 0)
       return 0.0;
 
-   if(!HistorySelectByPosition(ticket))
+   if(!PositionSelectByTicket(ticket))
+      return 0.0;
+
+   long position_id = PositionGetInteger(POSITION_IDENTIFIER);
+   if(position_id <= 0)
+      position_id = (long)ticket;
+
+   if(!HistorySelectByPosition(position_id))
       return 0.0;
 
    double total_commission = 0.0;

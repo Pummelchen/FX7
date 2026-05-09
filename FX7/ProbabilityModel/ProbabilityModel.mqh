@@ -319,8 +319,16 @@ bool FXRCEvaluateProbabilityDecision(const int idx,
 
    if(InpProbabilityUseAsRiskScaler)
    {
-      double edge = MathAbs(p_up - 0.5);
-      double edge_unit = Clip(edge / MathMax(InpProbabilityMinEdge, 0.01), 0.0, 1.0);
+      double directional_edge = (
+         dir > 0
+         ? p_up - 0.5
+         : 0.5 - p_up
+      );
+      double edge_unit = Clip(
+         MathMax(0.0, directional_edge) / MathMax(InpProbabilityMinEdge, 0.01),
+         0.0,
+         1.0
+      );
       decision.risk_multiplier = InpProbabilityMinRiskScale
                                + edge_unit * (InpProbabilityMaxRiskScale - InpProbabilityMinRiskScale);
       decision.risk_multiplier = Clip(
