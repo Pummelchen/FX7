@@ -957,6 +957,16 @@ bool ValidateSignalAndExecutionInputs()
          "Volatility windows must be positive and ATR window must be > 1."
       );
    }
+   if(InpVolLongHalfLife < InpVolShortHalfLife)
+      return FailInputValidation("InpVolLongHalfLife must be >= InpVolShortHalfLife.");
+   if(InpGammaA < 0.0
+      || InpGammaER < 0.0
+      || InpGammaV < 0.0
+      || InpGammaD < 0.0
+      || InpGammaP < 0.0)
+   {
+      return FailInputValidation("Regime penalty exponents must be >= 0.");
+   }
    if(InpGammaB <= 0.0)
       return FailInputValidation("InpGammaB must be > 0.");
    if(InpCorrLookback < 10)
@@ -989,6 +999,8 @@ bool ValidateRiskAndModelInputs()
    {
       return FailInputValidation("Risk limits must be > 0.");
    }
+   if(InpRiskPerTradePct - EPS() > InpMaxPortfolioRiskPct)
+      return FailInputValidation("InpRiskPerTradePct must be <= InpMaxPortfolioRiskPct.");
    if(InpCatastrophicStopATR <= 0.0)
       return FailInputValidation("InpCatastrophicStopATR must be > 0.");
    if(InpClassicSinglePositionTakeProfitUSD < 0.0
@@ -1088,8 +1100,10 @@ bool ValidateAdaptiveOverlayInputs()
           || InpXMomWeight2 < 0.0
           || InpXMomWeight3 < 0.0
           || (InpXMomWeight1 + InpXMomWeight2 + InpXMomWeight3) <= EPS()
+          || InpXMomCompositeWeight < 0.0
+          || InpXMomCompositeWeight > 1.0
           || InpXMomTanhScale <= 0.0
-          || InpXMomMinSymbols < 2.0
+          || InpXMomMinSymbols < 2
           || InpXMomRidgeLambda < 0.0))
    {
       return FailInputValidation("Cross-sectional momentum inputs are invalid.");
@@ -1105,6 +1119,8 @@ bool ValidateAdaptiveOverlayInputs()
           || InpMediumTrendTF1Weight < 0.0
           || InpMediumTrendTF2Weight < 0.0
           || (InpMediumTrendTF1Weight + InpMediumTrendTF2Weight) <= EPS()
+          || InpMediumTrendCompositeWeight < 0.0
+          || InpMediumTrendCompositeWeight > 1.0
           || InpMediumTrendTanhScale <= 0.0
           || InpMediumTrendAlignmentPenalty < 0.0
           || InpMediumTrendAlignmentPenalty > 1.0))
@@ -1145,9 +1161,7 @@ bool ValidateAdaptiveOverlayInputs()
 // Validates classic overlay behavior and trailing configuration.
 bool ValidateClassicOverlayInputs()
 {
-   if(InpClassicUseTrailingStop != 0 && InpClassicUseTrailingStop != 1)
-      return FailInputValidation("InpClassicUseTrailingStop must be 0 or 1.");
-   if(InpClassicUseTrailingStop == 1)
+   if(InpClassicUseTrailingStop)
    {
       if(InpClassicTrailStartPct < 10
          || InpClassicTrailStartPct > 100
@@ -1167,7 +1181,7 @@ bool ValidateClassicOverlayInputs()
       }
    }
    if(IsClassicTradeModel()
-      && InpClassicUseTrailingStop == 1
+      && InpClassicUseTrailingStop
       && InpClassicSinglePositionTakeProfitUSD <= 0.0)
    {
       return FailInputValidation(
@@ -1249,6 +1263,9 @@ bool ValidateCostInputsAndTrendWeights()
       return FailInputValidation("Cost inputs must be >= 0.");
    if(InpDependencyFailureGraceMinutes < 0)
       return FailInputValidation("InpDependencyFailureGraceMinutes must be >= 0.");
+
+   if(InpW1 < 0.0 || InpW2 < 0.0 || InpW3 < 0.0)
+      return FailInputValidation("Trend weights must be >= 0.");
 
    double wsum = InpW1 + InpW2 + InpW3;
    if(wsum <= EPS())
@@ -1799,13 +1816,13 @@ bool IsClassicSessionResetActive()
 // Returns whether classic trailing active.
 bool IsClassicTrailingActive()
 {
-   return (IsClassicTradeModel() && InpClassicUseTrailingStop != 0 && InpClassicSinglePositionTakeProfitUSD > 0.0);
+   return (IsClassicTradeModel() && InpClassicUseTrailingStop && InpClassicSinglePositionTakeProfitUSD > 0.0);
 }
 
 // Returns whether classic take profit active.
 bool IsClassicTakeProfitActive()
 {
-   return (IsClassicTradeModel() && InpClassicUseTrailingStop == 0 && InpClassicSinglePositionTakeProfitUSD > 0.0);
+   return (IsClassicTradeModel() && !InpClassicUseTrailingStop && InpClassicSinglePositionTakeProfitUSD > 0.0);
 }
 
 // Returns whether modern trade model.

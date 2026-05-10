@@ -315,7 +315,7 @@ void LogStartupRuntimeSummary()
          + "classic overlays (fixed TP, trailing, session reset) are disabled."
       );
    }
-   else if(InpClassicUseTrailingStop == 1)
+   else if(InpClassicUseTrailingStop)
    {
       Print(
          "FXRC classic trade model active with trailing stop enabled: "

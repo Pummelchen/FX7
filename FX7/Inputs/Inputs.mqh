@@ -88,7 +88,7 @@ input double             InpXMomCompositeWeight       = 0.0;
 input bool               InpXMomUseCurrencyDecomposition = true;
 input bool               InpXMomVolNormalize          = true;
 input double             InpXMomTanhScale             = 1.5;
-input double             InpXMomMinSymbols            = 8;
+input int                InpXMomMinSymbols            = 8;
 input double             InpXMomRidgeLambda           = 1e-4;
 input bool               InpXMomRequireSynchronizedBars = true;
 
@@ -193,7 +193,7 @@ input double             InpMaxMarginUsagePct         = 35.0;
 input double             InpCatastrophicStopATR       = 3.0;
 input double             InpClassicSinglePositionTakeProfitUSD = 5.0;
 input double             InpClassicSessionResetProfitUSD     = 10.0;
-input int                InpClassicUseTrailingStop              = 1;
+input bool               InpClassicUseTrailingStop              = true;
 input int                InpClassicTrailStartPct                = 50;
 input int                InpClassicTrailSpacingPct              = 20;
 input int                EAStopMinEqui                = 0;

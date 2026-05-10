@@ -6,6 +6,12 @@ int FXRCXMomMax3Int(const int a, const int b, const int c)
    return MathMax(a, MathMax(b, c));
 }
 
+// Returns the validated minimum eligible-pair count for cross-sectional momentum.
+int FXRCXMomMinimumSymbols()
+{
+   return (InpXMomMinSymbols > 2 ? InpXMomMinSymbols : 2);
+}
+
 // Adds a currency code to the cross-sectional currency list if absent.
 void FXRCXMomAppendCurrency(string &currencies[], const string currency)
 {
@@ -206,7 +212,7 @@ bool FXRCXMomContributionScores(const int lookback,
    }
 
    FXRCXMomCenterScores(scores);
-   return (valid_symbols >= (int)MathMax(2.0, InpXMomMinSymbols));
+   return (valid_symbols >= FXRCXMomMinimumSymbols());
 }
 
 // Computes latent currency momentum scores with ridge-regularized least squares.
@@ -253,7 +259,7 @@ bool FXRCXMomLeastSquaresScores(const int lookback,
       valid_symbols++;
    }
 
-   if(valid_symbols < (int)MathMax(2.0, InpXMomMinSymbols))
+   if(valid_symbols < FXRCXMomMinimumSymbols())
       return false;
 
    double ridge = MathMax(0.0, InpXMomRidgeLambda);
@@ -316,11 +322,11 @@ void FXRCLogCrossSectionalMomentumStartup()
       EnumToString(InpXMomTF)
    );
 
-   if(g_num_symbols < (int)MathMax(2.0, InpXMomMinSymbols))
+   if(g_num_symbols < FXRCXMomMinimumSymbols())
    {
       PrintFormat(
          "FXRC cross-sectional momentum warning: universe has %d symbols, "
-         + "minimum requested is %.0f.",
+         + "minimum requested is %d.",
          g_num_symbols,
          InpXMomMinSymbols
       );
